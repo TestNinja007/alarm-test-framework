@@ -1,0 +1,4 @@
+# Normalise to LF. Shell scripts and CI config are read by Linux runners,
+# where a CRLF shebang makes a script fail to execute at all.
+* text=auto eol=lf
+*.sh text eol=lf
