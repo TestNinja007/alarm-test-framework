@@ -1,0 +1,235 @@
+name: Performance
+
+# Deliberately not on push. A load test takes minutes, says nothing useful
+# about a one-line change, and would turn every commit into a queue. Run it
+# when something might have moved, and weekly so drift is noticed.
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Which k6 profile to run'
+        type: choice
+        default: load
+        options: [load, spike, stress, auth, smoke]
+  schedule:
+    # Sunday, early. Nothing else is competing for a runner.
+    - cron: '0 4 * * 0'
+
+concurrency:
+  group: performance
+  cancel-in-progress: false
+
+env:
+  PROMETHEUS_VERSION: '3.15.0'
+  GRAFANA_VERSION: '13.2.3'
+  # Pinned, and the same version the local runs used, so a CI number and a
+  # local one are comparable rather than nearly comparable.
+  K6_VERSION: '2.3.0'
+  PROFILE: ${{ inputs.profile || 'load' }}
+
+jobs:
+  measure:
+    name: ${{ inputs.profile || 'load' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: alarm_app
+          POSTGRES_PASSWORD: alarm_app
+          POSTGRES_DB: alarm_configurator
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U alarm_app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      BASE_URL: http://127.0.0.1:8080
+      DATABASE_URL: postgresql://alarm_app:alarm_app@127.0.0.1:5432/alarm_configurator
+
+    steps:
+      - name: Check out the framework
+        uses: actions/checkout@v4
+
+      - name: Check out the application under test
+        uses: actions/checkout@v4
+        with:
+          repository: TestNinja007/alarm-configurator
+          path: app
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            app/package-lock.json
+
+      - name: Build the application
+        working-directory: app
+        run: |
+          npm ci --include=dev
+          npm run build
+
+      # LIST_DELAY_MS=0 so the deliberate 600ms skeleton delay does not
+      # dominate. It is a testability feature, not latency, and leaving it on
+      # would measure it instead of the application.
+      - name: Start the application
+        working-directory: app
+        env:
+          NODE_ENV: test
+          PORT: 8080
+          TEST_SUPPORT: '1'
+          LIST_DELAY_MS: '0'
+          SEED_ON_START: always
+          SEED_PROFILE: demo
+          REGISTRATION_OPEN: '1'
+          MAIL_TRANSPORT: capture
+          TTS_PROVIDER: none
+          SESSION_SECRET: ci-session-secret-at-least-32-characters-long
+          LOG_LEVEL: warn
+        run: |
+          node src/api/dist/boot.js > ../app.log 2>&1 &
+          echo $! > ../app.pid
+
+      - name: Wait for the application to be ready
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS "$BASE_URL/api/v1/health" > /dev/null 2>&1; then
+              echo "Ready after ${i}s."; curl -fsS "$BASE_URL/api/v1/health"; exit 0
+            fi
+            sleep 1
+          done
+          echo "The application never became ready. Its log:"; cat app.log; exit 1
+
+      # Prometheus must be running *before* the load test. It is a scraper, so
+      # a window it was not up for is a permanent gap, not something that can
+      # be filled in afterwards.
+      - name: Start Prometheus
+        run: |
+          curl -sL -o prom.tar.gz \
+            "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz"
+          tar xzf prom.tar.gz
+          mv "prometheus-${PROMETHEUS_VERSION}.linux-amd64" prometheus
+          ./prometheus/prometheus \
+            --config.file=k6/observability/native/prometheus.yml \
+            --storage.tsdb.path=./prom-data \
+            --web.listen-address=127.0.0.1:9090 > prometheus.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:9090/-/ready > /dev/null 2>&1; then echo "Prometheus ready."; exit 0; fi
+            sleep 1
+          done
+          echo "Prometheus never became ready."; cat prometheus.log; exit 1
+
+      - name: Confirm it is scraping the application
+        run: |
+          # The target reports "unknown" until the first scrape lands, so a
+          # check that runs immediately proves nothing either way.
+          for i in $(seq 1 20); do
+            health=$(curl -sS 'http://127.0.0.1:9090/api/v1/targets' \
+              | python3 -c "import json,sys;print(next((t['health'] for t in json.load(sys.stdin)['data']['activeTargets'] if t['labels'].get('job')=='nudge'),'missing'))")
+            echo "nudge target: $health"
+            if [ "$health" = "up" ]; then exit 0; fi
+            sleep 2
+          done
+          echo "Prometheus never scraped the application."; exit 1
+
+      - name: Install k6
+        run: |
+          curl -sL -o k6.tar.gz             "https://github.com/grafana/k6/releases/download/v${K6_VERSION}/k6-v${K6_VERSION}-linux-amd64.tar.gz"
+          tar xzf k6.tar.gz
+          sudo mv "k6-v${K6_VERSION}-linux-amd64/k6" /usr/local/bin/k6
+          k6 version
+
+      # Thresholds failing is a result, not a broken job: a stress profile is
+      # meant to find a limit. The run is recorded either way and the outcome
+      # is reported in the summary.
+      - name: Run the profile
+        id: k6
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          k6 run --summary-export=k6-summary.json "k6/${PROFILE}.js" 2>&1 | tee k6-output.txt
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Start Grafana and provision the dashboard
+        run: |
+          curl -sL -o grafana.tar.gz \
+            "https://dl.grafana.com/oss/release/grafana-${GRAFANA_VERSION}.linux-amd64.tar.gz"
+          tar xzf grafana.tar.gz
+          mv "grafana-v${GRAFANA_VERSION}" grafana 2>/dev/null || mv "grafana-${GRAFANA_VERSION}" grafana
+          cp k6/observability/native/grafana/datasources/prometheus.yml grafana/conf/provisioning/datasources/nudge.yml
+          cp k6/observability/native/grafana/dashboards/dashboards.yml  grafana/conf/provisioning/dashboards/nudge.yml
+          cd grafana
+          # Ephemeral and bound to the runner. The password exists only for the
+          # life of this job and reaches nothing outside it.
+          NUDGE_DASHBOARDS="${GITHUB_WORKSPACE}/k6/observability/grafana/provisioning/dashboards" \
+          GF_SECURITY_ADMIN_PASSWORD=ci-ephemeral \
+          GF_SERVER_HTTP_ADDR=127.0.0.1 \
+          ./bin/grafana server --homepath "$(pwd)" > ../grafana.log 2>&1 &
+          cd ..
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/api/health > /dev/null 2>&1; then echo "Grafana ready."; exit 0; fi
+            sleep 2
+          done
+          echo "Grafana never became ready."; cat grafana.log; exit 1
+
+      # A snapshot carries its own data, so the public URL keeps working after
+      # this runner is destroyed. That is the whole point: a hosted, interactive
+      # dashboard with no always-on infrastructure behind it.
+      #
+      # Best-effort. It posts to a service outside this repository's control,
+      # and a run that measured correctly should not be marked failed because
+      # a third party was unavailable.
+      - name: Publish the dashboard as a snapshot
+        id: snapshot
+        continue-on-error: true
+        run: |
+          python3 scripts/publish-snapshot.py \
+            --grafana http://127.0.0.1:3000 \
+            --user admin --password ci-ephemeral \
+            --uid nudge-load \
+            --name "Nudge — ${PROFILE} — $(date -u +%Y-%m-%d\ %H:%M) UTC" \
+            | tee snapshot.txt
+          url=$(grep -oE 'https?://\S+' snapshot.txt | tail -1 || true)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Put the results on the run page
+        if: always()
+        run: |
+          {
+            echo "## Performance — \`${PROFILE}\`"
+            echo
+            if [ -n "${{ steps.snapshot.outputs.url }}" ]; then
+              echo "**[Open the dashboard for this run](${{ steps.snapshot.outputs.url }})** — interactive, with the data embedded."
+            else
+              echo "_The dashboard snapshot could not be published; the measurements below still stand._"
+            fi
+            echo
+            echo '```'
+            sed -n '/TOTAL RESULTS/,$p' k6-output.txt | head -40
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-${{ inputs.profile || 'load' }}
+          path: |
+            k6-output.txt
+            k6-summary.json
+            snapshot.txt
+            app.log
+            prometheus.log
+          retention-days: 30
+
+      - name: Stop everything
+        if: always()
+        run: kill "$(cat app.pid)" || true

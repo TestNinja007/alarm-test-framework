@@ -102,3 +102,29 @@ client holds the request — a completely different fault with completely simila
 request timings. See [DEF-08](../../../docs/defects/#def-08).
 
 Request timings alone cannot tell those apart. That is what this stack is for.
+
+## Publishing a run
+
+[`scripts/publish-snapshot.py`](../../../scripts/publish-snapshot.py) turns a
+dashboard into a Grafana snapshot — a dashboard that carries its own data, so
+the link keeps working after the Prometheus that produced it is gone. That is
+what makes it the right artefact for CI: the runner is destroyed minutes later.
+
+```bash
+python3 scripts/publish-snapshot.py \
+  --grafana http://127.0.0.1:3000 --user admin --password <password> \
+  --uid nudge-load --window now-30m --no-external
+```
+
+Drop `--no-external` to publish to Grafana's public snapshot service instead
+of keeping it local. That posts the dashboard **and its data** somewhere
+public, so it is opt-in rather than the default for a hand-run.
+
+**Why the script fetches the data itself.** Grafana builds `snapshotData` in
+the front end, out of panels it has already drawn. Creating a snapshot through
+the API hands the backend a dashboard definition and nothing else — and the
+result is a dashboard with no data and no datasource left to fetch any, which
+still returns a URL and still looks like it worked. The first version of this
+did exactly that: six panels, zero data points, a perfectly good link to an
+empty chart. So the script queries Prometheus for each panel's expression and
+attaches the frames itself, and refuses to publish when nothing came back.
