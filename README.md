@@ -37,7 +37,7 @@ npm test
 
 | Command | What it runs |
 | --- | --- |
-| `npm test` | the inner loop: API and Chromium |
+| `npm test` | everything, in the right passes |
 | `npm run test:api` | the API project only, no browser |
 | `npm run test:ui` | Chromium only |
 | `npm run test:browsers` | all three engines, one at a time |
@@ -45,6 +45,15 @@ npm test
 | `npm run test:parallel` | everything except the clock-dependent specs |
 | `npm run test:serial` | the clock-dependent specs, one worker |
 | `npm run report` | opens the last HTML report |
+
+`npm test` runs three passes rather than one command, and that is not
+housekeeping. Pinning the clock is server-wide state, so a single
+`playwright test` over both kinds of spec gives the other workers' sessions an
+expiry taken from the pinned instant — which surfaces as
+`Session is missing or expired` in some unrelated spec minutes later. The
+split used to live only in `test:parallel` and `test:serial`, which meant the
+obvious command was the wrong one; it is structural now, because that trap
+caught the author of these specs twice.
 
 `npm test` runs one engine on purpose. Three browser engines competing for
 one laptop — and for the single Node process they are all testing — made the
@@ -59,12 +68,16 @@ src/
   fixtures.ts           the fixtures every spec builds on
   globalSetup.ts        health check, then restore the seed profile
   globalTeardown.ts     release the clock, close the pool
+  pages/                page objects: the wizard, dashboard, alarm table
   support/
     env.ts              one place that reads the environment
     apiClient.ts        sessions and the CSRF header
     testHooks.ts        /test/* — reset, clock, throwaway users, mail
     db.ts               direct SQL, for what the API cannot assert
 tests/
+  alarms/               creating, editing, deleting, switching off
+  auth/                 signing in
+  groups/               groups, and what deleting one takes with it
   smoke/                checks on the framework itself
 docs/
   test-cases/           cases exported from TestQuality
@@ -97,6 +110,24 @@ those specs carry `@serial` and run in a pass of their own.
 nobody can trust, and retrying buries the evidence needed to fix it. Flaky
 specs are repaired or deleted.
 
+**The browser projects run two workers, the API project four.** Measured, not
+guessed. The UI specs pass 24 of 24 executions at two workers in 21.6 s; at
+three and four they fail intermittently, and each failure costs a flat ten
+seconds, making the higher count both less reliable and slower. The
+application is not the constraint — its event-loop lag stays at 2 ms, 548 of
+549 requests complete inside two seconds, and raising the database pool from
+10 to 40 changes nothing. The exact-ten-second signature is the same one in
+[DEF-08](docs/defects/#def-08), and it is capped rather than explained, which
+is the honest state of it.
+
+**The clicks are the test; the API is the oracle.** A UI spec drives the
+interface the way a person does, then asks the server what was actually
+stored. Neither half alone is enough: an API spec cannot see a form that
+reports success and writes nothing, or a feature with no button
+([DEF-10](docs/defects/#def-10)), or a browser that keeps speaking after the
+alarm is switched off ([DEF-05](docs/defects/#def-05)) — and a UI assertion
+alone cannot tell a saved record from a cached row.
+
 **Sign-in for browser specs happens through the API.** Thirty specs that each
 fill in the sign-in form are thirty specs that fail when that form breaks,
 which tells you nothing the one spec testing sign-in did not.
@@ -111,6 +142,7 @@ tagged `@db` and skip when `DATABASE_URL` is unset.
 | Tag | Meaning |
 | --- | --- |
 | `@smoke` | the framework's own checks, or a minimal product check |
+| `@ui` | drives the interface in a browser, rather than the API |
 | `@serial` | pins the clock, so it cannot run beside anything else |
 | `@db` | needs direct database access |
 

@@ -42,7 +42,7 @@ container.
 | [DEF-05](#def-05) | Disabling an alarm did not stop it speaking | High | P1 | Fixed | Exploratory, local |
 | [DEF-06](#def-06) | Seeded accounts could not sign in after a fresh seed | High | P1 | Fixed | Exploratory, local |
 | [DEF-07](#def-07) | The production build failed: devDependencies were skipped | High | P1 | Fixed | Deployment failure |
-| [DEF-08](#def-08) | Database connections queue for tens of seconds instead of failing | Medium | P1 | **Open** | Load test |
+| [DEF-08](#def-08) | Database-backed endpoints show multi-second maxima under load — cause not identified | Medium | P1 | **Open** | Load test |
 | [DEF-09](#def-09) | An occurrence count of zero was accepted and silently meant "never ends" | Medium | P1 | Fixed | **Automated test** |
 | [DEF-10](#def-10) | An alarm could not be created without first creating a group | Medium | P2 | Fixed | Exploratory, local |
 | [DEF-11](#def-11) | A CRLF checkout broke the container entrypoint | Medium | P3 | Fixed | Configuration review |
@@ -54,9 +54,11 @@ container.
 | [DEF-17](#def-17) | Sixteen requirements are cited by the test cases and written down nowhere | Low | P2 | **Open** | Documentation review |
 | [DEF-18](#def-18) | Authentication throughput is bounded by scrypt on four threads | Informational | — | By design | Load test |
 
-Two are open. Both are recorded with a proposed fix and neither is a surprise:
-DEF-08 is a tuning decision that load testing turned into a measurement, and
-DEF-17 is the gap the next deliverable has to close before it can be built.
+Two are open. DEF-17 is the gap the next deliverable has to close before it
+can be built. DEF-08 is the more interesting one: it was recorded with a
+confident root cause, three experiments disproved that cause, and the entry now
+carries the disproof rather than a tidier story. A register that only ever
+accumulates correct diagnoses is a register nobody checked.
 
 ## What the distribution says
 
@@ -421,16 +423,16 @@ version is pinned by file rather than asserted by a test.
 
 ## DEF-08
 
-**Database connections queue for tens of seconds instead of failing**
+**Database-backed endpoints show multi-second maxima under load — cause not identified**
 
 | | |
 | --- | --- |
 | Severity | Medium |
 | Priority | P1 |
-| Status | **Open** |
-| Component | `src/api/src/db/pool.ts` |
+| Status | **Open — originally diagnosed as the connection pool; that was wrong** |
+| Component | Not established. Not the application's own request handling. |
 | Requirement | — (non-functional) |
-| Environment | Local, one process, PostgreSQL 18 |
+| Environment | Local, one process, PostgreSQL 18, Windows |
 | Found by | `k6 run k6/load.js` — see [the first run](../../k6/results/2026-10-05-first-run.md) |
 
 **Steps to reproduce.** Run the mixed load profile at 20 virtual users against
@@ -439,38 +441,79 @@ one process. Read the maximum, not the p95.
 **Expected.** Either the request is served, or it is refused within a time a
 caller can do something about.
 
-**Actual.** Maxima of **50.2 seconds** on three separate endpoints, and 0.75%
-of requests failing outright. The distribution is bimodal: most requests are
-served in under 110 ms and a few wait fifty seconds.
+**Actual.** Client-measured maxima of **50.2 s** on the first run and
+**1m40s** on the second, on `GET /alarms` and `GET /me/upcoming`, with a
+small percentage of outright failures. The distribution is sharply bimodal:
+p95 stays near 130 ms while a handful of requests take a hundred times that.
 
-**Root cause.** The pool is created with `max: 10` and no
-`connectionTimeoutMillis`. Twenty virtual users each making four
+### The original diagnosis, and why it was wrong
+
+This was first recorded as the pool being created with `max: 10` and no
+`connectionTimeoutMillis`: twenty virtual users each making four
 database-backed requests exhaust it, and the rest queue with nothing to cut
-them off.
+them off. It was a tidy explanation, it fit the evidence available at the
+time, and it is **not what is happening.** Three experiments say so.
 
-The stress profile is the control that proves it. It drove
-`POST /alarms/preview` to 100 users and 495 requests a second with no failures
-at all, because preview runs the recurrence engine and never touches the
-database. Five times the concurrency, no queue. The difference between the two
-profiles is not how hard the work is — it is whether the work needs a
-connection.
+| Experiment | Expected if the pool were the cause | Observed |
+| --- | --- | --- |
+| Raise `max` from 10 to 40 | Queueing disappears | No change |
+| Add `connectionTimeoutMillis: 5000` | A 50 s hang becomes a 5 s error | No change; maxima got *longer* |
+| Compare client timings against the application's own request log | Server-side responses as slow as the client's | **Nothing like it** |
 
-**Two parts worth separating.** The cap itself is a tuning decision, and 10 may
-well be right for one process. The absent *timeout* is not: a caller that waits
-fifty seconds for a connection has already lost, and would be better told so.
+The third is conclusive. Across 6,959 responses the application logged during
+a run in which k6 measured a 1m40s maximum:
 
-**Proposed fix.** `connectionTimeoutMillis` on the pool, which converts a hang
-into an error a client can act on, and a decision on `max` taken against a
-measurement rather than a default.
+| Server-measured response time | Count |
+| --- | --- |
+| under 100 ms | 6,591 |
+| 100 ms – 1 s | 357 |
+| 1 s – 5 s | **0** |
+| 5 s – 30 s | 11 |
+| over 30 s | **0** |
 
-**Open question.** The 0.75% of failures were not isolated. They are presumed
-to share this cause, but the k6 scripts do not capture failing response bodies,
-so that is an inference and is recorded here as one. Capturing them is the
-first thing the next run should do, and it is a gap in the scripts rather than
+The application never took longer than about ten seconds for anything, and
+never once took between one and five seconds. A hundred-second request that
+the server believes it answered in thirty milliseconds did not spend that time
 in the application.
 
-**Why a p95 would have hidden this.** Every p95 threshold in the profile
-passed while it was happening. The measurement that found it was the maximum.
+### What the evidence actually points at
+
+The slow responses cluster at **exactly 10,070 ms**, and the same exact-ten-second
+signature turned up independently while automating the browser specs: a
+`GET /auth/me` that timed out at 10,000 ms carrying valid cookies, a `click`
+that hung for 10,000 ms after Playwright reported the element visible, enabled
+and stable, and a `/health` that took 10,011 ms while the event loop lag
+stayed at 2 ms. Meanwhile the event loop is idle throughout, the machine sits
+at 10–20% CPU across 20 cores, and some requests report a duration of 0 s,
+which is a connection that never completed rather than a slow one.
+
+A timeout-and-retry signature on the connection path, not a queue. This is a
+machine whose TLS interception has already broken two package managers in this
+project. That is a direction, not a conclusion, and it is written here as one.
+
+### Why it stays open, and stays filed
+
+The symptom is real and reproducible. What it is *not* is a defect in the
+request handling, which is what the register claimed for a day. It is left
+open with the misdiagnosis shown rather than quietly rewritten, because the
+useful part of this entry is now the method: a client-side measurement alone
+could not distinguish "the application is slow" from "something between the
+client and the application is slow," and the thing that separated them was
+comparing three independent measurements — the client's, the server's own
+request log, and the event loop.
+
+**What has been changed anyway.** `connectionTimeoutMillis` and a configurable
+`max` are now on the pool (`DATABASE_ACQUIRE_TIMEOUT_MS`,
+`DATABASE_POOL_MAX`). An unbounded wait for a connection is a latent hazard
+worth removing on its own merits — but it fixed nothing here, and is recorded
+as a hardening change rather than as the resolution of this defect.
+
+**Still outstanding.** The k6 scripts do not capture failing response bodies,
+so the failures have never been inspected. That is the next step, and it is a
+gap in the scripts rather than in the application.
+
+**Why a p95 would have hidden all of this.** Every p95 threshold in the profile
+passed, on both runs. The measurement that found it was the maximum.
 
 ---
 

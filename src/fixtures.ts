@@ -46,6 +46,16 @@ interface TestFixtures {
   seededApi: ApiClient;
   /** A browser page already signed in, without filling in the form. */
   signedInPage: Page;
+  /**
+   * A browser page signed in as a pristine account, for this test alone.
+   *
+   * `signedInPage` carries the worker's account, which the other tests in that
+   * worker share. That is right for reading and wrong for anything that
+   * creates or deletes: two specs both making a group called "Workout" collide
+   * on R-09, and a spec that counts rows sees whatever its neighbours left
+   * behind. This costs one scrypt hash and buys an empty account.
+   */
+  freshUserPage: Page;
 }
 
 async function newApiContext(storageState?: unknown): Promise<APIRequestContext> {
@@ -131,6 +141,22 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       baseURL: env.baseUrl,
       storageState: authState as never,
     });
+    const page = await context.newPage();
+    await use(page);
+    await context.close();
+  },
+
+  freshUserPage: async ({ browser, freshUser }, use) => {
+    const context = await browser.newContext({ baseURL: env.baseUrl });
+    // Signed in through the API rather than the form, for the same reason
+    // signedInPage is: a spec about deleting a group should not also be a spec
+    // about the sign-in form. The context's request shares its cookie jar with
+    // the browser, so the page is signed in without ever rendering /login.
+    const response = await context.request.post(`${env.apiPrefix}/auth/login`, {
+      data: { email: freshUser.email, password: freshUser.password },
+    });
+    expect(response.ok(), 'the fresh account should be able to sign in').toBeTruthy();
+
     const page = await context.newPage();
     await use(page);
     await context.close();
