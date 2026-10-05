@@ -1,0 +1,144 @@
+name: Suite
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Nightly, so the suite runs against a fresh checkout of the application
+    # even on days nothing here changed.
+    - cron: '0 3 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  suite:
+    name: ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      # One job per engine rather than one job cycling through them. Three
+      # browsers competing for one runner — and for the single Node process
+      # they are all testing — made the slower engines time out. Separate jobs
+      # also mean a WebKit failure is visible as a WebKit failure.
+      fail-fast: false
+      matrix:
+        project: [api, chromium, firefox, webkit]
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: alarm_app
+          POSTGRES_PASSWORD: alarm_app
+          POSTGRES_DB: alarm_configurator
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U alarm_app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      BASE_URL: http://127.0.0.1:8080
+      DATABASE_URL: postgresql://alarm_app:alarm_app@127.0.0.1:5432/alarm_configurator
+
+    steps:
+      - name: Check out the framework
+        uses: actions/checkout@v4
+
+      # The application is a separate repository on purpose: the suite is
+      # written against its published interface, not against internals it can
+      # see. CI brings the two together only to run them.
+      - name: Check out the application under test
+        uses: actions/checkout@v4
+        with:
+          repository: TestNinja007/alarm-configurator
+          path: app
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            app/package-lock.json
+
+      - name: Build the application
+        working-directory: app
+        run: |
+          npm ci --include=dev
+          npm run build
+
+      - name: Start the application
+        working-directory: app
+        env:
+          NODE_ENV: test
+          PORT: 8080
+          TEST_SUPPORT: '1'
+          SEED_ON_START: always
+          SEED_PROFILE: demo
+          REGISTRATION_OPEN: '1'
+          MAIL_TRANSPORT: capture
+          TTS_PROVIDER: none
+          SESSION_SECRET: ci-session-secret-at-least-32-characters-long
+          LOG_LEVEL: warn
+        run: |
+          node src/api/dist/boot.js > ../app.log 2>&1 &
+          echo $! > ../app.pid
+
+      - name: Wait for the application to be ready
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS "$BASE_URL/api/v1/health" > /dev/null 2>&1; then
+              echo "Ready after ${i}s."
+              curl -fsS "$BASE_URL/api/v1/health"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "The application never became ready. Its log:"
+          cat app.log
+          exit 1
+
+      - name: Install the framework
+        run: npm ci
+
+      - name: Install the browser
+        if: matrix.project != 'api'
+        run: npx playwright install --with-deps ${{ matrix.project }}
+
+      # Two passes within the job. Pinning the clock is server-wide state, so
+      # anything that pins time runs alone; everything else runs in parallel.
+      - name: Run the parallel pass
+        run: npx playwright test --project=${{ matrix.project }} --grep-invert @serial
+
+      - name: Run the serial pass
+        if: always()
+        run: npx playwright test --project=${{ matrix.project }} --grep @serial --workers=1
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.project }}
+          path: playwright-report/
+          retention-days: 14
+
+      - name: Upload the application log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-log-${{ matrix.project }}
+          path: app.log
+          retention-days: 14
+
+      - name: Stop the application
+        if: always()
+        run: kill "$(cat app.pid)" || true
