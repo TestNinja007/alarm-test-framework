@@ -1,0 +1,23 @@
+# Prometheus for a native run — no container.
+#
+# Identical to ../prometheus.yml except for the target: inside Docker the
+# application is reached through the gateway alias, and here it is simply on
+# localhost. Kept as a separate file rather than a parameter so neither path
+# is subtly wrong for the other.
+global:
+  # Tighter than the usual 15s: a load run is ninety seconds long, and at 15s
+  # a spike is three points on a graph.
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: nudge
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['127.0.0.1:8080']
+        labels:
+          service: nudge-api
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ['127.0.0.1:9090']

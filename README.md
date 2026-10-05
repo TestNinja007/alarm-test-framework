@@ -182,11 +182,23 @@ headline:
 > do.
 
 **Every p95 threshold passed while that was happening.** The measurement that
-found it was the maximum. That is the argument for reading a distribution
-rather than a summary, and it is the reason
-[`observability/`](k6/observability/) exists: a Prometheus and Grafana stack
-with a dashboard whose most useful panel is event-loop lag, which is the one
-thing request timings cannot explain.
+found it was the maximum.
+
+That diagnosis turned out to be wrong, and the write-up now carries the three
+experiments that disproved it — which is the more useful artefact. The
+instrument that settled it was [`observability/`](k6/observability/): a
+Prometheus and Grafana stack whose most useful panel is event-loop lag.
+
+During the spike profile that lag rose to 364 ms and recovered — a process
+genuinely busy. During the mixed load profile, requests took a hundred seconds
+while the same number stayed at **2 ms**. Two failures with near-identical
+request timings and completely different causes, separated by one panel.
+
+![The dashboard during a spike](k6/results/2026-10-05-spike-dashboard.jpg)
+
+The stack runs natively as well as in a container —
+[`observability/native/`](k6/observability/native/) is the path that has
+actually been run.
 
 ## Defects
 
