@@ -1,0 +1,44 @@
+# Prometheus and Grafana, pointed at the application's /metrics endpoint.
+#
+# Separate from the application's own compose file on purpose: this is
+# observability for a load run, not part of running the product. Bring it up
+# beside an application already running on the host, drive load with k6, and
+# watch what the process does while it happens.
+#
+#   docker compose -f k6/observability/docker-compose.yml up -d
+#   k6 run k6/load.js
+#   open http://localhost:3001        (admin / admin)
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: nudge-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      # Short retention: these are load-run traces, not production history.
+      - '--storage.tsdb.retention.time=7d'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - '9090:9090'
+    extra_hosts:
+      # The application runs on the host, not in this network.
+      - 'host.docker.internal:host-gateway'
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    container_name: nudge-grafana
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      # No sign-up, no telemetry, no update nagging on a local stack.
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      # 3001 because 3000 is a common development port.
+      - '3001:3000'

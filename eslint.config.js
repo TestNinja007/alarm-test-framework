@@ -2,7 +2,9 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['node_modules', 'playwright-report', 'test-results'] },
+  // k6 scripts run in k6's own runtime, not Node, and import from k6/* modules
+  // that resolve at run time rather than on disk.
+  { ignores: ['node_modules', 'playwright-report', 'test-results', 'k6'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

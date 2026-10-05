@@ -1,0 +1,19 @@
+global:
+  # Tighter than the usual 15s: a load run is ninety seconds long, and at 15s
+  # a spike is three points on a graph.
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: nudge
+    metrics_path: /metrics
+    static_configs:
+      # The application runs on the host; this container reaches it through
+      # the gateway alias declared in the compose file.
+      - targets: ['host.docker.internal:8080']
+        labels:
+          service: nudge-api
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
