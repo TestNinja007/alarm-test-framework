@@ -116,12 +116,15 @@ jobs:
 
       # Two passes within the job. Pinning the clock is server-wide state, so
       # anything that pins time runs alone; everything else runs in parallel.
+      # --pass-with-no-tests on both: a project may legitimately have none
+      # of one kind. Only the API specs pin the clock today, so without it
+      # the serial pass failed every browser job for finding nothing to run.
       - name: Run the parallel pass
-        run: npx playwright test --project=${{ matrix.project }} --grep-invert @serial
+        run: npx playwright test --project=${{ matrix.project }} --grep-invert @serial --pass-with-no-tests
 
       - name: Run the serial pass
         if: always()
-        run: npx playwright test --project=${{ matrix.project }} --grep @serial --workers=1
+        run: npx playwright test --project=${{ matrix.project }} --grep @serial --workers=1 --pass-with-no-tests
 
       - name: Upload the report
         if: always()
