@@ -79,7 +79,17 @@ export default defineConfig({
      * all, and the blob file name has to be unique across every one of them.
      */
     process.env.CI
-      ? ['blob', { fileName: `report-${process.env.REPORT_NAME ?? 'unnamed'}.zip` }]
+      ? [
+          'blob',
+          {
+            // Both the file name and the directory. The blob reporter clears
+            // its output directory when it starts, so two passes writing
+            // uniquely-named blobs into one directory still leaves only the
+            // second — which published a report containing a single test.
+            outputDir: `blob-report/${process.env.REPORT_NAME ?? 'unnamed'}`,
+            fileName: `report-${process.env.REPORT_NAME ?? 'unnamed'}.zip`,
+          },
+        ]
       : ['html', { open: 'never' }],
     // Read by src/summary.ts to put the result on the run page itself.
     ['json', { outputFile: 'test-results/results.json' }],

@@ -206,8 +206,17 @@ jobs:
           path: all-blob-reports
           merge-multiple: true
 
+      # The blobs arrive one directory deep, since each pass writes into its
+      # own to keep the next from clearing it. merge-reports wants them flat,
+      # and the file names are already unique per pass.
+      - name: Flatten the blobs
+        run: |
+          mkdir -p blobs
+          find all-blob-reports -name '*.zip' -exec cp {} blobs/ \;
+          echo "Merging:"; ls -1 blobs
+
       - name: Merge them into one HTML report
-        run: npx playwright merge-reports --reporter html ./all-blob-reports
+        run: npx playwright merge-reports --reporter html ./blobs
 
       - name: Keep the merged report as an artifact too
         uses: actions/upload-artifact@v4
