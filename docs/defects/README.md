@@ -1,0 +1,861 @@
+# Defect register
+
+Every defect found in Nudge so far, with how it was found, what caused it and
+what now guards it.
+
+The register lives here rather than in the application repository because it is
+a test deliverable — the test plan promises it — and because the interesting
+column is not the fix. It is **how found**. A list of eighteen defects says
+little; eighteen defects sorted by the activity that caught them says what the
+testing is actually worth.
+
+Defects are filed against the product. Where a fix exists the commit is named,
+and lives in
+[TestNinja007/alarm-configurator](https://github.com/TestNinja007/alarm-configurator).
+
+## How these are classified
+
+**Severity** is impact, independent of who cares:
+
+| | |
+| --- | --- |
+| **Critical** | Data exposed or lost, or the service unavailable. |
+| **High** | A primary flow cannot be completed, or completes with a wrong result the person would act on. |
+| **Medium** | A flow is completable but obstructed, or wrong in a secondary path. |
+| **Low** | Cosmetic, diagnostic, documentation, or affecting a narrow subset. |
+| **Informational** | Measured, by design, worth writing down. Not a defect; recorded so it is not rediscovered as one. |
+
+**Priority** is fix order, and follows the test plan's own criterion: anything
+functional is P1, the supporting paths around it are P2, and everything else is
+P3. Severity and priority disagree on purpose — DEF-11 is a Medium that is P3,
+because a broken container entrypoint stops nobody who is not using the
+container.
+
+## The register
+
+| ID | Defect | Severity | Priority | Status | Found by |
+| --- | --- | --- | --- | --- | --- |
+| [DEF-01](#def-01) | Verification code returned in the registration response on the deployed site | Critical | P1 | Fixed | Exploratory, deployed |
+| [DEF-02](#def-02) | Health check awaited the mail server; the whole site returned 502 | Critical | P1 | Fixed | Production log review |
+| [DEF-03](#def-03) | SMTP credentials would have been sent unencrypted | High | P1 | Fixed | Configuration review |
+| [DEF-04](#def-04) | An alarm could not be created without a spoken message | High | P1 | Fixed | Exploratory, local |
+| [DEF-05](#def-05) | Disabling an alarm did not stop it speaking | High | P1 | Fixed | Exploratory, local |
+| [DEF-06](#def-06) | Seeded accounts could not sign in after a fresh seed | High | P1 | Fixed | Exploratory, local |
+| [DEF-07](#def-07) | The production build failed: devDependencies were skipped | High | P1 | Fixed | Deployment failure |
+| [DEF-08](#def-08) | Database connections queue for tens of seconds instead of failing | Medium | P1 | **Open** | Load test |
+| [DEF-09](#def-09) | An occurrence count of zero was accepted and silently meant "never ends" | Medium | P1 | Fixed | **Automated test** |
+| [DEF-10](#def-10) | An alarm could not be created without first creating a group | Medium | P2 | Fixed | Exploratory, local |
+| [DEF-11](#def-11) | A CRLF checkout broke the container entrypoint | Medium | P3 | Fixed | Configuration review |
+| [DEF-12](#def-12) | Signing out landed on the sign-in form | Low | P3 | Fixed | Exploratory, local |
+| [DEF-13](#def-13) | No way back from the signed-out forms but the browser's back button | Low | P3 | Fixed | Exploratory, local |
+| [DEF-14](#def-14) | The alarms table was announced as "this folder" on a page that is not one | Low | P3 | Fixed | Exploratory, local |
+| [DEF-15](#def-15) | A documented rule the application no longer had | Low | P2 | Fixed | Documentation review |
+| [DEF-16](#def-16) | A failing mail check reported no reason | Low | P3 | Fixed | While diagnosing DEF-02 |
+| [DEF-17](#def-17) | Sixteen requirements are cited by the test cases and written down nowhere | Low | P2 | **Open** | Documentation review |
+| [DEF-18](#def-18) | Authentication throughput is bounded by scrypt on four threads | Informational | — | By design | Load test |
+
+Two are open. Both are recorded with a proposed fix and neither is a surprise:
+DEF-08 is a tuning decision that load testing turned into a measurement, and
+DEF-17 is the gap the next deliverable has to close before it can be built.
+
+## What the distribution says
+
+| Activity | Defects |
+| --- | --- |
+| Exploratory use, local | 7 |
+| Configuration review | 2 |
+| Documentation review | 2 |
+| Load testing | 2 |
+| Exploratory use, deployed | 1 |
+| Production log review | 1 |
+| Deployment failure | 1 |
+| Automated test | 1 |
+| While diagnosing another defect | 1 |
+
+**One defect was found by the automated suite.** That number is low for a
+reason worth stating rather than hiding: the suite was written after the
+product, so it inherited an application whose obvious faults had already been
+exercised by hand. Its value is the next eighteen, not these. And the one it
+did catch, DEF-09, was the first fault in the application that nobody had found
+by using it — a wrong answer returned with a success status, which is precisely
+the kind a person does not notice and an assertion cannot miss.
+
+**Half of these were outside functional testing entirely.** Nine of eighteen —
+DEF-02, DEF-03, DEF-07, DEF-08, DEF-11, DEF-15, DEF-16, DEF-17 and DEF-18 —
+came from reading configuration, reading logs, a failed deploy, a load run, or
+comparing documentation against behaviour. No amount of clicking the interface
+finds a default that sends passwords in the clear, or a connection pool with no
+timeout. That is the argument for the spread of testing types in the plan, made
+from this project's own history rather than from a textbook.
+
+**Two were the same mistake a fortnight apart.** DEF-04 and DEF-09 share one
+root cause: a nullable field declared as a union of a type and null, which
+Ajv's type coercion satisfies by converting the value rather than rejecting it.
+The first turned `null` into `""`; the second turned `0` into `null`. Finding a
+fault twice in different clothes is the signal to go looking for the rest of
+its family, which is why every nullable field in the alarm schema was
+converted, not only the two that had failed.
+
+---
+
+## DEF-01
+
+**Verification code returned in the registration response on the deployed site**
+
+| | |
+| --- | --- |
+| Severity | Critical |
+| Priority | P1 |
+| Status | Fixed — `157f59d` |
+| Component | Registration, mail transport |
+| Requirement | R-30 |
+| Environment | Deployed instance, Brevo HTTPS transport |
+| Found by | Registering a real address on the deployed site |
+
+**Steps to reproduce.** With `MAIL_TRANSPORT=brevo`, register any email
+address. Read the response body.
+
+**Expected.** The code is delivered to the address and appears nowhere else. A
+caller who does not control the inbox learns nothing.
+
+**Actual.** The six-digit verification code was returned in the response *and*
+emailed. Anyone could register an address they did not own, read the code off
+the page, and hold a verified account on it.
+
+**Root cause.** The decision to hand the code back was written as
+`transport === 'smtp'` — a check for one transport name rather than for the
+property that mattered, which is whether the transport delivers anywhere at
+all. Adding `brevo` later fell through to the development branch by omission.
+Nothing was wrong with the new transport; the guard was the wrong shape from
+the start and worked only as long as nothing was added.
+
+**Fix.** Callers ask `deliversExternally()` instead of comparing names, so a
+transport added in future cannot reintroduce this by being forgotten. The
+`capture` transport, which sends nothing, still returns the code, because that
+is its entire purpose.
+
+**Regression coverage.** None yet. A case asserting that the registration
+response carries no code whenever the transport delivers externally is the
+guard this needs, and it belongs in the security set.
+
+---
+
+## DEF-02
+
+**Health check awaited the mail server; the whole site returned 502**
+
+| | |
+| --- | --- |
+| Severity | Critical |
+| Priority | P1 |
+| Status | Fixed — `8c0a97e` |
+| Component | `GET /health`, SMTP transport |
+| Requirement | T-04 |
+| Environment | Deployed instance, SMTP transport with no credentials configured |
+| Found by | Reading the deployed logs |
+
+**Steps to reproduce.** Point the SMTP transport at a host that accepts a
+connection and then sends nothing. Call `/health`.
+
+**Expected.** Health answers immediately, and reports what it knows.
+
+**Actual.** Every health check logged "incoming request" and none logged
+"request completed". The platform concluded the service was dead and the entire
+site returned 502 — including every page that has nothing to do with mail.
+
+**Root cause.** `/health` awaited `transporter.verify()`, which opens an SMTP
+connection. The host accepted it and stayed silent, and nodemailer's default
+timeouts are measured in minutes, so the request never finished. A health
+endpoint that depends on a third party answering reports the third party's
+availability, not its own.
+
+**Fix.** Health reports a cached reachability value, refreshed in the
+background at most once a minute and never awaited; it is `null` until the
+first probe finishes, which is a real state and is typed as one. The SMTP
+transport also carries explicit connection, greeting and socket timeouts, so
+nothing can hang for minutes again.
+
+**Verified.** Against a socket that accepts and then stays silent: ten
+consecutive health checks returned 200 in about six milliseconds each, and the
+background probe settled to `reachable: false` a few seconds later.
+
+**Regression coverage.** Partial. `src/globalSetup.ts` asserts health before
+every run, so a hanging health endpoint fails the suite immediately rather than
+eighty specs later. Nothing yet asserts the timeout behaviour itself, which
+would need a deliberately silent socket in the harness.
+
+---
+
+## DEF-03
+
+**SMTP credentials would have been sent unencrypted**
+
+| | |
+| --- | --- |
+| Severity | High |
+| Priority | P1 |
+| Status | Fixed — `cd623e3` |
+| Component | Mail configuration |
+| Requirement | — (configuration) |
+| Environment | Any deployment using SMTP on port 587 |
+| Found by | Reading the mail configuration while preparing to deploy |
+
+**Steps to reproduce.** Configure SMTP against a real provider on port 587
+without setting `MAIL_IGNORE_TLS`. Observe that STARTTLS is skipped.
+
+**Expected.** Transport encryption is the default. Skipping it is something you
+have to ask for.
+
+**Actual.** `MAIL_IGNORE_TLS` defaulted to on, which suited the local mail
+catcher and nothing else. Against a real provider the SMTP login would have
+gone over the wire in the clear.
+
+**Root cause.** A default chosen for the convenience of the development
+environment and never revisited for any other. The local catcher needs no TLS,
+so the setting that made it work became the setting everything inherited.
+
+**Fix.** The default is off. The compose file turns it on explicitly for the
+local catcher, which is the only place it belongs. The mail settings are also
+declared in the deployment blueprint with the login, password and from-address
+marked `sync: false`, so they are set in the dashboard rather than committed.
+
+**Regression coverage.** None, and automation is the wrong instrument — this is
+a default in a configuration file. It is caught by review, and the
+counter-measure that generalises is the one applied: insecure settings are
+opt-in per environment rather than opt-out globally.
+
+---
+
+## DEF-04
+
+**An alarm could not be created without a spoken message**
+
+| | |
+| --- | --- |
+| Severity | High |
+| Priority | P1 |
+| Status | Fixed — `a631f74` |
+| Component | Alarm schema, validation |
+| Requirement | R-24, R-31 |
+| Environment | All |
+| Found by | Creating an alarm while working on something else |
+
+**Steps to reproduce.** `POST /alarms` with a valid name, time, timezone, start
+date and rule, and no `speechText` at all.
+
+**Expected.** 201. A spoken message is optional; an alarm with none simply does
+not speak.
+
+**Actual.** Refused, with a field error demanding a message — for an alarm that
+had deliberately not asked to speak. The most ordinary creation the product
+supports was impossible through the API.
+
+**Root cause.** `speechText` was declared
+`Type.Union([Type.String(), Type.Null()])`, which compiles to `anyOf`. Fastify
+enables Ajv's type coercion by default, and Ajv tries the branches in order: it
+reached the string branch first and satisfied it by coercing `null` into `""`.
+The string branch had no pattern to fail, so the coercion stuck, `speechText`
+arrived as an empty string rather than absent, and the rule that refuses an
+*empty* message correctly refused it.
+
+The dated fields escaped only by accident: `""` fails their format pattern, so
+Ajv fell through to the null branch and the value survived.
+
+**Fix.** The nullable fields are declared as nullable **types**
+(`type: ['string', 'null']`) rather than unions of types. A nullable type has
+no alternative branch to coerce into, and applies its string constraints only
+to strings. A whitespace-only message is still refused, which is the rule that
+was always intended.
+
+**Regression coverage.** Incidental but real: the `validAlarm()` helper in
+`tests/alarms/validation.api.spec.ts` omits `speechText` entirely, so every
+positive create in the suite — TC58 through TC61 and all nine recurrence specs
+— would fail if this returned. No dedicated case asserts it, which is a gap
+worth closing precisely because the coverage it has today is a side effect of
+how a helper happens to be written.
+
+---
+
+## DEF-05
+
+**Disabling an alarm did not stop it speaking**
+
+| | |
+| --- | --- |
+| Severity | High |
+| Priority | P1 |
+| Status | Fixed — `233d83a` |
+| Component | Notification scheduler (browser) |
+| Requirement | R-28, R-32 |
+| Environment | All browsers |
+| Found by | Switching an alarm off and listening |
+
+**Steps to reproduce.** Create an alarm repeating every ten seconds. Let it
+fire. Switch it off. Wait.
+
+**Expected.** It stops.
+
+**Actual.** It kept speaking for up to another two minutes. Closing the tab did
+not stop it either — it carried on talking with the site shut.
+
+**Root cause.** Three separate omissions, which is why it looked intermittent:
+how long it kept talking depended on how many occurrences happened to be inside
+the two-minute lookahead when you switched it off.
+
+1. Nothing invalidated the upcoming query when an alarm changed, so the
+   scheduler did not learn about the change until the next thirty-second poll.
+2. The scheduler only ever *added* timers. It never reconciled, so a timer
+   armed for an occurrence that had since left the feed still fired.
+3. A `speechSynthesis` utterance already handed to the browser can outlive the
+   page that queued it, and React's cleanup is not guaranteed to run when a tab
+   closes.
+
+The server was right throughout — a disabled alarm leaves the upcoming feed
+immediately, confirmed by disabling one and watching its fifty occurrences go
+to zero. The whole fault was in the browser, which is worth noting because an
+API-only suite could not have found it.
+
+**Fix.** Toggling, bulk toggling, deleting an alarm, saving one in the wizard
+and deleting a group all invalidate the upcoming query. The scheduler disarms
+every timer whose occurrence is no longer in the feed before arming new ones,
+which covers disabling, deleting and rescheduling with one rule rather than
+three. A `pagehide` listener cancels both speech synthesis and the audio
+element, and so does switching notifications off.
+
+**Regression coverage.** TC27 covers it as a written case — disable an alarm
+due inside the lookahead and assert nothing fires — and is one of the specs not
+yet automated. It needs `page.clock` and a stubbed `speechSynthesis`, and it is
+the highest-value case in the unautomated set: this defect is the proof that
+the fault is reachable, silent from the server's point of view, and audible to
+nobody but the user.
+
+---
+
+## DEF-06
+
+**Seeded accounts could not sign in after a fresh seed**
+
+| | |
+| --- | --- |
+| Severity | High |
+| Priority | P1 |
+| Status | Fixed — `bd4643a` |
+| Component | Seed data, `POST /test/users` |
+| Requirement | T-01, T-03, R-29 |
+| Environment | All |
+| Found by | Reseeding the database |
+
+**Steps to reproduce.** Run the seed against a database created after the email
+verification migration. Sign in as any seeded account.
+
+**Expected.** 200 and a session. A seeded account has no inbox and is verified
+by definition.
+
+**Actual.** 401. Every seeded account, and every throwaway account from
+`POST /test/users`, was unverified and could not sign in — which is to say the
+entire test fixture was unusable, and so was every test that would have
+depended on it.
+
+**Root cause.** A regression introduced by email verification. The migration
+back-filled `email_verified_at` on existing rows, so the running database kept
+working and nothing looked wrong. Both *insert* paths — the seed and the
+throwaway-user hook — were missed. The fault was invisible until somebody
+created a database from nothing, which is the one thing a working development
+environment rarely does.
+
+**Fix.** Both insert paths set `email_verified_at`, since neither kind of
+account has an inbox to check.
+
+**Regression coverage.** Structural, and the strongest kind in this register.
+`src/globalSetup.ts` resets the seed before every run and the worker-scoped
+`workerUser` fixture signs in through `POST /test/users`, so a return of this
+defect fails the entire suite at setup, in every project, before a single spec
+runs. The lesson generalises past the fix: a migration that back-fills hides
+the insert path it forgot, so the test for it has to start from an empty
+database.
+
+---
+
+## DEF-07
+
+**The production build failed: devDependencies were skipped**
+
+| | |
+| --- | --- |
+| Severity | High |
+| Priority | P1 |
+| Status | Fixed — `d88cc57` |
+| Component | Build, deployment |
+| Requirement | — (deployment) |
+| Environment | Render |
+| Found by | The first deploy failing |
+
+**Steps to reproduce.** Run `npm ci` with `NODE_ENV=production`, then build the
+web bundle.
+
+**Expected.** The build succeeds.
+
+**Actual.** It failed on its first import. Vite, `@vitejs/plugin-react` and the
+React types were absent.
+
+**Root cause.** The deploy set `NODE_ENV=production`, which `npm ci` honours by
+skipping devDependencies — where every build tool lives. The build tools are
+development dependencies and the build is a production step, so the convention
+and the requirement point in opposite directions.
+
+**Reproduced locally.** 135 packages installed under `NODE_ENV=production`
+against 481 with `--include=dev`, the former matching Render's log exactly.
+Worth recording as technique rather than detail: the fastest route to this
+answer was reproducing the *package count*, not the error message.
+
+**Fix.** The install includes dev dependencies explicitly. A `.node-version`
+file also pins Node, because the root `engines` range of `>=22` let the platform
+resolve to 26.10.0 — not the Active LTS the project targets, and liable to
+change again without warning.
+
+**Regression coverage.** CI builds the application from source on every run in
+all four projects, so a build that cannot build fails immediately. The Node
+version is pinned by file rather than asserted by a test.
+
+---
+
+## DEF-08
+
+**Database connections queue for tens of seconds instead of failing**
+
+| | |
+| --- | --- |
+| Severity | Medium |
+| Priority | P1 |
+| Status | **Open** |
+| Component | `src/api/src/db/pool.ts` |
+| Requirement | — (non-functional) |
+| Environment | Local, one process, PostgreSQL 18 |
+| Found by | `k6 run k6/load.js` — see [the first run](../../k6/results/2026-10-05-first-run.md) |
+
+**Steps to reproduce.** Run the mixed load profile at 20 virtual users against
+one process. Read the maximum, not the p95.
+
+**Expected.** Either the request is served, or it is refused within a time a
+caller can do something about.
+
+**Actual.** Maxima of **50.2 seconds** on three separate endpoints, and 0.75%
+of requests failing outright. The distribution is bimodal: most requests are
+served in under 110 ms and a few wait fifty seconds.
+
+**Root cause.** The pool is created with `max: 10` and no
+`connectionTimeoutMillis`. Twenty virtual users each making four
+database-backed requests exhaust it, and the rest queue with nothing to cut
+them off.
+
+The stress profile is the control that proves it. It drove
+`POST /alarms/preview` to 100 users and 495 requests a second with no failures
+at all, because preview runs the recurrence engine and never touches the
+database. Five times the concurrency, no queue. The difference between the two
+profiles is not how hard the work is — it is whether the work needs a
+connection.
+
+**Two parts worth separating.** The cap itself is a tuning decision, and 10 may
+well be right for one process. The absent *timeout* is not: a caller that waits
+fifty seconds for a connection has already lost, and would be better told so.
+
+**Proposed fix.** `connectionTimeoutMillis` on the pool, which converts a hang
+into an error a client can act on, and a decision on `max` taken against a
+measurement rather than a default.
+
+**Open question.** The 0.75% of failures were not isolated. They are presumed
+to share this cause, but the k6 scripts do not capture failing response bodies,
+so that is an inference and is recorded here as one. Capturing them is the
+first thing the next run should do, and it is a gap in the scripts rather than
+in the application.
+
+**Why a p95 would have hidden this.** Every p95 threshold in the profile
+passed while it was happening. The measurement that found it was the maximum.
+
+---
+
+## DEF-09
+
+**An occurrence count of zero was accepted and silently meant "never ends"**
+
+| | |
+| --- | --- |
+| Severity | Medium |
+| Priority | P1 |
+| Status | Fixed — `88548b1` |
+| Component | Alarm schema, validation |
+| Requirement | R-31 |
+| Environment | All |
+| Found by | **The automated suite, on its first proper run** |
+
+**Steps to reproduce.** `POST /alarms` with `endAfterOccurrences: 0`.
+
+**Expected.** 422, with the error naming `endAfterOccurrences`. Zero
+occurrences is not a series.
+
+**Actual.** 201, and an alarm that never ends. The request was accepted and
+quietly meant something else — the worst of the available outcomes, because the
+caller has no indication anything went wrong and the alarm fires forever.
+
+**Root cause.** The same trap as DEF-04, a fortnight later.
+`Type.Union([Type.Integer(), Type.Null()])` compiles to `anyOf`; Ajv tried the
+integer branch, failed its `minimum`, then satisfied the null branch by
+coercing `0` into `null`. And `null` is how this schema spells "no limit".
+
+`1001` was refused correctly throughout, because nothing coerces it to null —
+which is why a test of only the upper bound would have passed and reported the
+field as sound. Both ends, or neither.
+
+**Fix.** `endAfterOccurrences` and `repeatEvery` are nullable integer types
+rather than unions. A nullable type applies its `minimum` only to numbers, so
+`null` still passes and `0` is refused.
+
+**Regression coverage.** TC60, in `tests/alarms/validation.api.spec.ts`:
+occurrence counts of 1 and 1000 are accepted, 0 and 1001 are not. The spec
+stands unchanged from the run in which it failed, because it was right.
+
+**Two things worth noting beyond the fix.** It is the first fault in the
+application that nobody had found by using it, caught within seconds of the
+first suite run. And TC60 is a **P3** case — the lowest priority in the
+boundary set — which found the highest-impact silent fault in the register.
+Priority is a reasonable guide to what to write first and a poor predictor of
+what will fail.
+
+---
+
+## DEF-10
+
+**An alarm could not be created without first creating a group**
+
+| | |
+| --- | --- |
+| Severity | Medium |
+| Priority | P2 |
+| Status | Fixed — `80e33ec` |
+| Component | Dashboard, routing |
+| Requirement | R-31, R-33 |
+| Environment | All |
+| Found by | Trying to make an alarm on a new account |
+
+**Steps to reproduce.** Sign in to an account with no groups. Try to create an
+alarm from the dashboard.
+
+**Expected.** An alarm can be created without choosing where it belongs.
+Alarms without a group are a supported, documented state.
+
+**Actual.** No route in. Every path to the wizard went through a group first,
+so the feature that lets an alarm exist without one was reachable only by
+opening Unfiled and creating it there — deciding where something belongs before
+deciding what it is, which is backwards for anything made in the moment.
+
+**Root cause.** The capability was added at the schema, the API and the data
+model, and the interface was never given an entry point to match. A feature
+that exists everywhere except where someone would use it.
+
+**Fix.** A New alarm button on the dashboard, going straight to the wizard with
+no group chosen.
+
+**Regression coverage.** None yet. The groups set covers moving an alarm
+between groups and out of one; the case that matters here is creating an alarm
+from an account that has no groups at all, which belongs with whatever
+exercises an empty account.
+
+---
+
+## DEF-11
+
+**A CRLF checkout broke the container entrypoint**
+
+| | |
+| --- | --- |
+| Severity | Medium |
+| Priority | P3 |
+| Status | Fixed — `1b92067` |
+| Component | Container build |
+| Requirement | — (environment) |
+| Environment | Docker image built from a Windows checkout |
+| Found by | Reading the checkout settings |
+
+**Steps to reproduce.** Clone on Windows with default Git settings. Build the
+image. Run it.
+
+**Expected.** The entrypoint executes.
+
+**Actual.** It does not. A CRLF shebang fails inside a Linux image, and the
+error does not say so.
+
+**Root cause.** Git on Windows checks out text files with CRLF by default. A
+shell script is a text file to Git and a binary contract to the kernel.
+
+**Fix.** `.gitattributes` normalises the repository to LF, and names
+`*.sh` and `*.sql` explicitly, because both are read by Linux containers.
+
+**Regression coverage.** None. The container environment is unverified by the
+project's own admission and nothing in CI builds the image — which makes this
+the one defect in the register whose fix is itself untested.
+
+---
+
+## DEF-12
+
+**Signing out landed on the sign-in form**
+
+| | |
+| --- | --- |
+| Severity | Low |
+| Priority | P3 |
+| Status | Fixed — `80e33ec` |
+| Component | Navigation |
+| Requirement | — (usability) |
+| Environment | All |
+| Found by | Signing out |
+
+**Expected.** Leaving takes you to the front door.
+
+**Actual.** It took you to the sign-in form, as though the point of leaving
+were to come straight back.
+
+**Root cause.** Correct when written — the sign-in form was the only signed-out
+page that existed. A landing page was added later and nothing revisited where
+sign-out pointed. A defect created by an addition elsewhere, which is the kind
+regression testing exists for and the kind no changelog flags.
+
+**Fix.** Sign-out goes to the landing page.
+
+**Regression coverage.** None. An assertion on the post-sign-out URL is cheap
+and belongs with the authentication set.
+
+---
+
+## DEF-13
+
+**No way back from the signed-out forms but the browser's back button**
+
+| | |
+| --- | --- |
+| Severity | Low |
+| Priority | P3 |
+| Status | Fixed — `f5951d3` |
+| Component | Signed-out layout |
+| Requirement | — (usability) |
+| Environment | All |
+| Found by | Opening the sign-in page and changing my mind |
+
+**Expected.** The logo in the top left goes home, as it has on every website
+for twenty years.
+
+**Actual.** The lockup was decoration. Someone who opened the sign-in page and
+thought better of it had the browser's back button and nothing else.
+
+**Fix.** The lockup is a link to the landing page on all five signed-out forms,
+styled to stay a mark rather than become a link: inherited colour, no
+underline, the wordmark picking up the accent on hover, and a focus ring offset
+far enough to sit around the whole lockup rather than crop it.
+
+**Regression coverage.** None. Worth one assertion per signed-out page, which
+a loop over five routes covers in four lines.
+
+---
+
+## DEF-14
+
+**The alarms table was announced as "this folder" on a page that is not one**
+
+| | |
+| --- | --- |
+| Severity | Low |
+| Priority | P3 |
+| Status | Fixed — `2a88c41` |
+| Component | Alarms table, accessible caption |
+| Requirement | — (accessibility) |
+| Environment | All; screen readers only |
+| Found by | Reading the Unfiled page's markup |
+
+**Expected.** The caption describes the page it is on.
+
+**Actual.** It fell back to "this folder" on the Unfiled page, which is
+explicitly not a folder — the whole point of that page is that these alarms
+have none.
+
+**Root cause.** A default written when every alarms table had a folder to name.
+Making alarms work without one left the fallback describing a case it was never
+designed for.
+
+**Why it survived.** A screen reader is the only thing that reads this string.
+Nothing visible was wrong, so nothing visible flagged it, and the first pass
+over the page did not catch it.
+
+**Fix.** The caption names the unfiled case directly.
+
+**Regression coverage.** None, and this is the clearest argument in the
+register for the accessibility work that is currently deferred: an automated
+check of accessible names would have caught it without anyone thinking to look.
+
+---
+
+## DEF-15
+
+**A documented rule the application no longer had**
+
+| | |
+| --- | --- |
+| Severity | Low |
+| Priority | P2 |
+| Status | Fixed — `4285ce6` |
+| Component | README, rule A-08 |
+| Requirement | A-08 |
+| Environment | — |
+| Found by | Reading the rules table in order to write the framework from it |
+
+**Expected.** The documented rules describe the application.
+
+**Actual.** A-08 claimed an alarm cannot be created before a folder exists.
+That had been true, and was the entire point of the setup dependency, until
+alarms were allowed to exist without a group — and nobody updated the sentence.
+The engine suite count was stale too: 30 tests, not 21.
+
+**Why this is a defect and not a typo.** The rules table is the specification
+the test framework is written against. A framework built from it would have
+asserted a rule the application does not have, failed, and been believed —
+sending somebody to fix working behaviour. A wrong specification does not
+produce no tests. It produces confident wrong ones.
+
+**Fix.** A-08 now states that an alarm no longer needs a group, and points at
+the section describing it.
+
+**Regression coverage.** None available by automation — this is documentation
+drifting from behaviour, and the only instrument is the mapping exercise that
+caught it. Doing that mapping deliberately, rather than as a side effect of
+needing the numbers, is what the traceability matrix is for.
+
+---
+
+## DEF-16
+
+**A failing mail check reported no reason**
+
+| | |
+| --- | --- |
+| Severity | Low |
+| Priority | P3 |
+| Status | Fixed — `11f5fe6` |
+| Component | `GET /health`, mail transport |
+| Requirement | T-04 |
+| Environment | Deployed instance |
+| Found by | Trying to diagnose DEF-02 and having nothing to go on |
+
+**Expected.** A failing check says what failed.
+
+**Actual.** `reachable: false` and nothing else. Wrong credentials, a blocked
+port and an unreachable host were indistinguishable — three different problems
+with three different fixes, reported identically.
+
+**Fix.** The failure is logged and surfaced in health, where the error code
+distinguishes them: `EAUTH` for bad credentials, `ETIMEDOUT` or `ECONNREFUSED`
+for a port that never opened.
+
+**Regression coverage.** None, and low value — this is diagnosability rather
+than behaviour. It earns its place in the register because it is part of why
+DEF-02 took as long to find as it did, and because "the system cannot tell you
+why it is unhappy" is a defect class in its own right.
+
+---
+
+## DEF-17
+
+**Sixteen requirements are cited by the test cases and written down nowhere**
+
+| | |
+| --- | --- |
+| Severity | Low |
+| Priority | P2 |
+| Status | **Open** |
+| Component | Requirements, README |
+| Requirement | R-13 to R-28 |
+| Environment | — |
+| Found by | Looking across both repositories for one authoritative list |
+
+**Steps to reproduce.** Collect every `R-nn` referenced in `docs/test-cases/`
+and `tests/`. Compare against the rules table in the application README.
+
+**Expected.** Every requirement a case claims to verify has text somewhere
+saying what it requires.
+
+**Actual.** The README documents R-01 to R-12. The cases and specs cite R-01 to
+R-34. R-29 to R-34 have text in
+[requirement-mapping.md](../test-cases/requirement-mapping.md), added when
+mapping exposed that the documented rules were almost entirely about refusal.
+**R-13 to R-28 have an identifier and no definition.** They were derived from
+the application's behaviour while the cases were being written, and the numbers
+were recorded while the sentences were not.
+
+**Why it matters now.** A traceability matrix maps requirements to cases to
+specs to runs. Sixteen of its rows currently have no left-hand side. The matrix
+cannot be built correctly on top of this, and building it anyway would produce
+a document that looks complete and traces nothing — the same failure as DEF-15,
+one layer up.
+
+**Proposed fix.** Write R-13 to R-28 out in full and put the whole set, R-01 to
+R-34, in one place that both repositories cite. The application README is the
+natural home, since R-01 to R-12 already live there and the mapping document
+already says the rest belong beside them.
+
+This is the work item that blocks the next deliverable, which is why it is
+filed as a defect rather than left as a note.
+
+---
+
+## DEF-18
+
+**Authentication throughput is bounded by scrypt on four threads**
+
+| | |
+| --- | --- |
+| Severity | Informational |
+| Priority | — |
+| Status | By design; now documented |
+| Component | `src/api/src/auth/password.ts` |
+| Requirement | — (non-functional) |
+| Environment | Local, one process |
+| Found by | `k6 run k6/auth.js`, after the browser suite stalled |
+
+**Measured.** 81 requests a second against `POST /auth/login`, against 495 for
+an endpoint doing comparable computation without hashing — roughly six times
+the cost per request. 6,523 requests at 20 virtual users, no failures, p95
+236 ms.
+
+**Why.** Passwords are hashed with scrypt at `N=16384, r=8, p=1`. It is
+memory-hard by design — that is the point of the algorithm — and it runs on
+Node's libuv thread pool, which is four threads by default.
+
+**Not a defect.** Recorded because the consequence is not obvious from the
+number: concurrent sign-ins occupy that pool and slow requests that have
+nothing to do with authentication. That is exactly how it was first noticed.
+The browser suite signed in once per test, queued around fourteen hash
+operations across four threads, and the whole application appeared to hang —
+which looked like a product defect and was not. Writing it down is what stops
+the next person spending a day on it.
+
+**What it changed.** The framework signs in once per *worker* rather than once
+per test, through the worker-scoped `workerUser` and `authState` fixtures in
+`src/fixtures.ts`. Four workers, four sign-ins, reused `storageState`.
+
+**What it means if it ever does become a defect.** The ceiling moves with
+`UV_THREADPOOL_SIZE` or with more processes, not by weakening the hash. Anyone
+tempted to lower `N` to make this graph look better should read this entry
+first.
+
+---
+
+## Filing a defect
+
+The fields above are the template. Two of them are routinely missing from
+defect reports and matter most here:
+
+- **How found.** Not credit — diagnosis. A register where everything was found
+  by exploratory testing is telling you where the automation is not.
+- **Regression coverage.** What stops it coming back, named specifically, or
+  the honest word *none*. A fixed defect with no guard is a defect with a
+  schedule.
+
+Severity is argued. Priority is negotiated.

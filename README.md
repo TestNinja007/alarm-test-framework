@@ -11,6 +11,11 @@ requirements — rather than against internals they happen to be able to see. It
 also removes the quiet failure mode where an application is adjusted until a
 test passes.
 
+Two things here are worth reading before the code: the
+[defect register](docs/defects/), which records every defect found and what now
+stops each one coming back, and the [load testing](#load-testing), which found
+a bottleneck that every percentile threshold in the run reported as healthy.
+
 ## Running it
 
 The suite needs an instance started with `TEST_SUPPORT=1`. Without those hooks
@@ -63,6 +68,11 @@ tests/
   smoke/                checks on the framework itself
 docs/
   test-cases/           cases exported from TestQuality
+  defects/              every defect found, how it was found, what guards it
+k6/
+  smoke|load|stress|spike|auth.js    the load profiles
+  observability/        Prometheus and Grafana, for watching a run
+  results/              what each run measured
 ```
 
 Specs are named for the layer they run at: `*.api.spec.ts` runs without a
@@ -114,3 +124,42 @@ a run fails.
 
 CI is the authority. A test passing on a development machine is not evidence,
 because a working tree is half-edited by definition.
+
+## Load testing
+
+Five k6 profiles in [`k6/`](k6/), each with a job rather than a number:
+`smoke` proves the script before a long run wastes ten minutes discovering the
+credentials were wrong, `load` is a plausible working day, `stress` steps
+upward until something bends, `spike` jumps without warning, and `auth` measures
+sign-in on purpose because it costs six times what anything else does.
+
+The [first run](k6/results/2026-10-05-first-run.md) is written up in full. Its
+headline:
+
+> The stress profile drove one endpoint to 100 concurrent users and 84,285
+> requests with no failures at all. The *mixed* profile, at a fifth of that
+> concurrency, produced 50-second maximums and 0.75% failures — because the
+> endpoint that scaled never touches the database and the ones that queued all
+> do.
+
+**Every p95 threshold passed while that was happening.** The measurement that
+found it was the maximum. That is the argument for reading a distribution
+rather than a summary, and it is the reason
+[`observability/`](k6/observability/) exists: a Prometheus and Grafana stack
+with a dashboard whose most useful panel is event-loop lag, which is the one
+thing request timings cannot explain.
+
+## Defects
+
+[`docs/defects/`](docs/defects/) is the register: eighteen defects with
+severity, priority, root cause, the fix, and — the column that matters — what
+regression coverage each one has now, named specifically, or the honest word
+*none*.
+
+Sorted by how they were found, it is also an audit of this project's own
+testing. Eight came from using the application, nine from reading
+configuration, logs or documentation, from a failed deploy or from a load run,
+and exactly one from the automated suite. That last number is low because the suite was written after
+the product; the defect it caught was the first one nobody had found by using
+it, and it was a success status returned for a request that meant something
+else.
