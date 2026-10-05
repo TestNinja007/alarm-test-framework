@@ -2,6 +2,13 @@
 
 [![Suite](https://github.com/TestNinja007/alarm-test-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/TestNinja007/alarm-test-framework/actions/workflows/ci.yml)
 
+**[Read the latest run →](https://testninja007.github.io/alarm-test-framework/)**
+— every spec, every engine, with traces. Published from `main` on each run, and
+merged from the four matrix jobs so one page holds the lot.
+
+> The badge is one bit of information. The report is the evidence behind it,
+> which is the part worth reading.
+
 Automated tests for **Nudge** ([alarm-configurator](https://github.com/TestNinja007/alarm-configurator)),
 kept in a repository of their own.
 
