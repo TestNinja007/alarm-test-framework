@@ -108,7 +108,7 @@ converted, not only the two that had failed.
 | --- | --- |
 | Severity | Critical |
 | Priority | P1 |
-| Status | Fixed — `157f59d` |
+| Status | Fixed — `bf46829` |
 | Component | Registration, mail transport |
 | Requirement | R-30 |
 | Environment | Deployed instance, Brevo HTTPS transport |
@@ -150,7 +150,7 @@ guard this needs, and it belongs in the security set.
 | --- | --- |
 | Severity | Critical |
 | Priority | P1 |
-| Status | Fixed — `8c0a97e` |
+| Status | Fixed — `3ac792c` |
 | Component | `GET /health`, SMTP transport |
 | Requirement | T-04 |
 | Environment | Deployed instance, SMTP transport with no credentials configured |
@@ -196,7 +196,7 @@ would need a deliberately silent socket in the harness.
 | --- | --- |
 | Severity | High |
 | Priority | P1 |
-| Status | Fixed — `cd623e3` |
+| Status | Fixed — `2fc2666` |
 | Component | Mail configuration |
 | Requirement | — (configuration) |
 | Environment | Any deployment using SMTP on port 587 |
@@ -236,7 +236,7 @@ opt-in per environment rather than opt-out globally.
 | --- | --- |
 | Severity | High |
 | Priority | P1 |
-| Status | Fixed — `a631f74` |
+| Status | Fixed — `168c629` |
 | Component | Alarm schema, validation |
 | Requirement | R-24, R-31 |
 | Environment | All |
@@ -286,7 +286,7 @@ how a helper happens to be written.
 | --- | --- |
 | Severity | High |
 | Priority | P1 |
-| Status | Fixed — `233d83a` |
+| Status | Fixed — `0e4ecbd` |
 | Component | Notification scheduler (browser) |
 | Requirement | R-28, R-32 |
 | Environment | All browsers |
@@ -341,7 +341,7 @@ nobody but the user.
 | --- | --- |
 | Severity | High |
 | Priority | P1 |
-| Status | Fixed — `bd4643a` |
+| Status | Fixed — `1f37b10` |
 | Component | Seed data, `POST /test/users` |
 | Requirement | T-01, T-03, R-29 |
 | Environment | All |
@@ -386,7 +386,7 @@ database.
 | --- | --- |
 | Severity | High |
 | Priority | P1 |
-| Status | Fixed — `d88cc57` |
+| Status | Fixed — `718cd60` |
 | Component | Build, deployment |
 | Requirement | — (deployment) |
 | Environment | Render |
@@ -525,7 +525,7 @@ passed, on both runs. The measurement that found it was the maximum.
 | --- | --- |
 | Severity | Medium |
 | Priority | P1 |
-| Status | Fixed — `88548b1` |
+| Status | Fixed — `eccba38` |
 | Component | Alarm schema, validation |
 | Requirement | R-31 |
 | Environment | All |
@@ -574,7 +574,7 @@ what will fail.
 | --- | --- |
 | Severity | Medium |
 | Priority | P2 |
-| Status | Fixed — `80e33ec` |
+| Status | Fixed — `f23d12b` |
 | Component | Dashboard, routing |
 | Requirement | R-31, R-33 |
 | Environment | All |
@@ -613,7 +613,7 @@ exercises an empty account.
 | --- | --- |
 | Severity | Medium |
 | Priority | P3 |
-| Status | Fixed — `1b92067` |
+| Status | Fixed — `6cbfbaa` |
 | Component | Container build |
 | Requirement | — (environment) |
 | Environment | Docker image built from a Windows checkout |
@@ -647,7 +647,7 @@ the one defect in the register whose fix is itself untested.
 | --- | --- |
 | Severity | Low |
 | Priority | P3 |
-| Status | Fixed — `80e33ec` |
+| Status | Fixed — `f23d12b` |
 | Component | Navigation |
 | Requirement | — (usability) |
 | Environment | All |
@@ -678,7 +678,7 @@ and belongs with the authentication set.
 | --- | --- |
 | Severity | Low |
 | Priority | P3 |
-| Status | Fixed — `f5951d3` |
+| Status | Fixed — `ce65e1c` |
 | Component | Signed-out layout |
 | Requirement | — (usability) |
 | Environment | All |
@@ -708,7 +708,7 @@ a loop over five routes covers in four lines.
 | --- | --- |
 | Severity | Low |
 | Priority | P3 |
-| Status | Fixed — `2a88c41` |
+| Status | Fixed — `418867e` |
 | Component | Alarms table, accessible caption |
 | Requirement | — (accessibility) |
 | Environment | All; screen readers only |
@@ -744,7 +744,7 @@ check of accessible names would have caught it without anyone thinking to look.
 | --- | --- |
 | Severity | Low |
 | Priority | P2 |
-| Status | Fixed — `4285ce6` |
+| Status | Fixed — `58d3601` |
 | Component | README, rule A-08 |
 | Requirement | A-08 |
 | Environment | — |
@@ -781,7 +781,7 @@ needing the numbers, is what the traceability matrix is for.
 | --- | --- |
 | Severity | Low |
 | Priority | P3 |
-| Status | Fixed — `11f5fe6` |
+| Status | Fixed — `57ab801` |
 | Component | `GET /health`, mail transport |
 | Requirement | T-04 |
 | Environment | Deployed instance |
