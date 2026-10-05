@@ -128,21 +128,25 @@ jobs:
           npx playwright test --project=${{ matrix.project }}
           --grep-invert @serial --pass-with-no-tests
           ${{ matrix.project != 'api' && '--workers=2' || '' }}
+        env:
+          REPORT_NAME: ${{ matrix.project }}-parallel
 
       - name: Run the serial pass
         if: always()
         run: npx playwright test --project=${{ matrix.project }} --grep @serial --workers=1 --pass-with-no-tests
+        env:
+          REPORT_NAME: ${{ matrix.project }}-serial
 
       - name: Put the results on the run page
         if: always()
         run: npx tsx src/summary.ts test-results/results.json "${{ matrix.project }}"
 
-      - name: Upload the report
+      - name: Upload this job's blob report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-${{ matrix.project }}
-          path: playwright-report/
+          name: blob-report-${{ matrix.project }}
+          path: blob-report/
           retention-days: 14
 
       - name: Upload the application log
@@ -156,3 +160,71 @@ jobs:
       - name: Stop the application
         if: always()
         run: kill "$(cat app.pid)" || true
+
+  # One report from four jobs, published where someone will read it.
+  #
+  # The per-job artifacts were zips: to see whether WebKit passed you had to
+  # open Actions, find the run, download a zip and open it locally. Merging the
+  # blobs into a single HTML report and putting it on Pages makes that one
+  # click, and keeps every engine's result in one place.
+  report:
+    name: report
+    if: always()
+    needs: suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    # Pages refuses concurrent deployments, and the workflow-level group
+    # cancels in progress, which would abandon a half-finished deploy.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Collect every job's blob report
+        uses: actions/download-artifact@v4
+        with:
+          pattern: blob-report-*
+          path: all-blob-reports
+          merge-multiple: true
+
+      - name: Merge them into one HTML report
+        run: npx playwright merge-reports --reporter html ./all-blob-reports
+
+      - name: Keep the merged report as an artifact too
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 30
+
+      # Only from main. A pull request from a fork cannot deploy Pages, and a
+      # branch's results are not the published ones.
+      - name: Package it for Pages
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: playwright-report/
+
+      - name: Publish
+        id: deploy
+        if: github.ref == 'refs/heads/main'
+        uses: actions/deploy-pages@v4

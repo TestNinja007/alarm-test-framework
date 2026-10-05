@@ -68,7 +68,19 @@ export default defineConfig({
 
   reporter: [
     process.env.CI ? ['github'] : ['list'],
-    ['html', { open: 'never' }],
+    /*
+     * In CI the report is a blob, not HTML. Four matrix jobs each produce a
+     * report and a reader wants one site with every engine in it rather than
+     * four zips to download and open separately, so the `report` job merges
+     * them with `playwright merge-reports` and publishes the result.
+     *
+     * REPORT_NAME keeps the blobs from overwriting each other. There are two
+     * passes per job — parallel, then the clock-dependent specs — so eight in
+     * all, and the blob file name has to be unique across every one of them.
+     */
+    process.env.CI
+      ? ['blob', { fileName: `report-${process.env.REPORT_NAME ?? 'unnamed'}.zip` }]
+      : ['html', { open: 'never' }],
     // Read by src/summary.ts to put the result on the run page itself.
     ['json', { outputFile: 'test-results/results.json' }],
   ],
