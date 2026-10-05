@@ -42,9 +42,12 @@ export default defineConfig({
   globalSetup: './src/globalSetup.ts',
   globalTeardown: './src/globalTeardown.ts',
 
-  reporter: process.env.CI
-    ? [['github'], ['html', { open: 'never' }], ['json', { outputFile: 'test-results/results.json' }]]
-    : [['list'], ['html', { open: 'never' }]],
+  reporter: [
+    process.env.CI ? ['github'] : ['list'],
+    ['html', { open: 'never' }],
+    // Read by src/summary.ts to put the result on the run page itself.
+    ['json', { outputFile: 'test-results/results.json' }],
+  ],
 
   use: {
     baseURL: env.baseUrl,
