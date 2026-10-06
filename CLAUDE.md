@@ -61,6 +61,59 @@ If this changes, the harness needs one thing: a `tier` on `POST /test/users`.
 
 ---
 
+## Where things stand
+
+*Last updated 6 October 2026. Update this when it stops being true — it is the
+first thing a session with no memory of the work should read.*
+
+Both halves of the agreed shape are **built and green**.
+
+| | Count | |
+| --- | --- | --- |
+| Playwright | 78 | api 49, chromium 27, firefox 27, webkit 27 |
+| pytest | 62 | every one of the 10 tables examined |
+| Application unit tests | 38 | in the other repository |
+| CI | 6 jobs | green on both repositories |
+
+Traceability: 34 of 34 requirements have a case, **33 of 34 have a spec**, 57
+of 61 designed cases are automated. The one requirement without a spec is R-26,
+uncovered on purpose — see "Paid tiers are out of scope" above. The four cases
+without one are in [not-automated.md](docs/test-cases/not-automated.md), and
+each is a decision rather than work outstanding.
+
+Defects: **22 found, 20 fixed, 1 open ([DEF-08](docs/defects/README.md)), 1 by
+design.**
+
+### Open, in the order I would pick them up
+
+1. **DEF-08** — database-backed endpoints show multi-second maxima under load
+   and the cause is not established. The instrumentation to answer it is
+   written and unit-tested (`k6/lib/diagnose.js`, phase breakdown per request),
+   but **k6 is not installed on this machine, so no instrumented run exists.**
+   The scripts are written and untested in exactly the way this project
+   criticises elsewhere, and that is recorded in the defect entry rather than
+   glossed.
+2. **Verification and reset codes are stored as issued, not hashed.** Not a
+   failure against any documented rule, so it is not filed as a defect. It is
+   a decision waiting for a human, with the argument both ways written into
+   `database/tests/test_credentials_and_sessions.py`.
+3. **`docs/test-cases/core-cases.csv` is generated and not imported.** It holds
+   TC1–TC10 for TestQuality; importing it creates records in the user's test
+   management and is their action, not mine.
+4. **`performance.yml` has never run.** It exists and has no run history, so
+   the k6 profiles have only local results behind them.
+5. **The compose stack has never been run.** It is the first command the
+   application's README offers for running locally. A newcomer's-first-command
+   problem, not a shipping one — Render deploys the Node runtime.
+
+### Written up for sharing
+
+The pytest layer has a prose write-up for people outside the repositories:
+**[PyTest Database Layer — What Was Built](https://claude.ai/code/artifact/74ad60a7-103e-4584-8d9c-3f120f161c88)**.
+It covers why there are two stacks, what the layer asserts, what it found, and
+what is deliberately not in it. If the layer changes materially, that document
+goes stale and should be updated with it.
+
 ## Conventions that are easy to get wrong
 
 **Spec naming decides where it runs.** `*.api.spec.ts` runs without a browser;
