@@ -1,7 +1,8 @@
 import http from 'k6/http';
 import { check, group } from 'k6';
-import { Trend } from 'k6/metrics';
+import { Counter, Trend } from 'k6/metrics';
 import { API, headers, previewBody, signIn, writeHeaders } from './lib/session.js';
+import { recorder } from './lib/diagnose.js';
 
 /**
  * Normal load.
@@ -21,6 +22,29 @@ const preview = new Trend('endpoint_preview', true);
 const upcoming = new Trend('endpoint_upcoming', true);
 const conflicts = new Trend('endpoint_conflicts', true);
 const list = new Trend('endpoint_list', true);
+
+/*
+ * DEF-08's instrumentation.
+ *
+ * The profile used to assert status === 200 and discard everything else, so a
+ * hundred-second request left behind a number and no account of where the time
+ * went. These separate the phases the application can explain from the ones it
+ * cannot: `waiting` is the server thinking, `blocked` and `connecting` happen
+ * before it is handed anything.
+ */
+const phaseBlocked = new Trend('phase_blocked', true);
+const phaseConnecting = new Trend('phase_connecting', true);
+const phaseWaiting = new Trend('phase_waiting', true);
+const failures = new Counter('diag_failures');
+const slowRequests = new Counter('diag_slow');
+
+const record = recorder({
+  blocked: phaseBlocked,
+  connecting: phaseConnecting,
+  waiting: phaseWaiting,
+  failures,
+  slow: slowRequests,
+});
 
 export const options = {
   stages: [
@@ -57,6 +81,7 @@ export default function (data) {
       tags: { name: 'GET /me/upcoming' },
     });
     upcoming.add(response.timings.duration);
+    record('GET /me/upcoming', response);
     check(response, { 'upcoming answered': (r) => r.status === 200 });
   });
 
@@ -67,6 +92,7 @@ export default function (data) {
       tags: { name: 'POST /alarms/preview' },
     });
     preview.add(response.timings.duration);
+    record('POST /alarms/preview', response);
     check(response, {
       'preview answered': (r) => r.status === 200,
       'preview returned occurrences': (r) => r.json().items.length > 0,
@@ -79,6 +105,7 @@ export default function (data) {
       tags: { name: 'GET /alarms' },
     });
     list.add(response.timings.duration);
+    record('GET /alarms', response);
     check(response, { 'list answered': (r) => r.status === 200 });
   });
 
@@ -89,6 +116,7 @@ export default function (data) {
         tags: { name: 'GET /folders/{id}/conflicts' },
       });
       conflicts.add(response.timings.duration);
+      record('GET /folders/{id}/conflicts', response);
       check(response, { 'conflicts answered': (r) => r.status === 200 });
     });
   }

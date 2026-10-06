@@ -511,9 +511,35 @@ request log, and the event loop.
 worth removing on its own merits — but it fixed nothing here, and is recorded
 as a hardening change rather than as the resolution of this defect.
 
-**Still outstanding.** The k6 scripts do not capture failing response bodies,
-so the failures have never been inspected. That is the next step, and it is a
-gap in the scripts rather than in the application.
+**The scripts can now answer this; the run has not happened.** The profiles
+asserted `status === 200` and discarded everything else, which is why a
+hundred-second request left a number behind and no account of itself. They now
+record what k6 always knew and nobody read: the per-phase breakdown.
+
+| Metric | Time in it means |
+| --- | --- |
+| `phase_waiting` | the server thinking — the only phase its request log should agree with |
+| `phase_blocked` | waiting for a connection slot or a dial, **before** the server is handed anything |
+| `phase_connecting` | the TCP handshake |
+
+Failures and slow requests print `error_code`, `status`, the dominant phase and
+the body. `error_code` is the single most localising field k6 offers and was
+never captured; status `0` alone cannot tell a timeout from a refused dial.
+
+**What this predicts, written down before the run so it can be wrong.** If the
+ten-second cluster is `blocked` or `connecting`, these requests never reached
+the application and the direction recorded above becomes a finding. If it is
+`waiting`, the application is lying in its own request log and this defect is
+somewhere entirely different. The classifier is unit-tested against DEF-08's
+own numbers — 10,070 ms with the server reporting 31 ms — in
+[`tests/smoke/k6Diagnostics.api.spec.ts`](../../tests/smoke/k6Diagnostics.api.spec.ts),
+so the interpretation is verified even though the measurement is not.
+
+**Still outstanding, and it is now one thing.** k6 is not installed on this
+machine, so no instrumented run exists. The scripts are written and their
+logic is tested; they have not been executed. That distinction is kept
+deliberately — the compose stack in the application repository is shipped
+untested and says so, and this should not quietly become a second one.
 
 **Later evidence, from a different direction.** A process left up for about
 three hours began failing pool acquisitions outright, with

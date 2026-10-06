@@ -65,6 +65,43 @@ that request timings alone do not.
 
 Needs Docker. The scripts and the findings do not.
 
+## Reading the phase diagnostics
+
+Every profile now records where each request spent its time, because DEF-08
+needed that and no run had ever captured it. A client-side duration cannot
+tell "the application is slow" from "something between the client and the
+application is slow"; the phase breakdown can.
+
+| Metric | What time in it means |
+| --- | --- |
+| `phase_waiting` | the server thinking. The only phase its own request log should agree with |
+| `phase_blocked` | waiting for a connection slot or a dial. **Before** the server is handed anything |
+| `phase_connecting` | the TCP handshake itself |
+
+Two counters come with them: `diag_failures`, tagged by `error_code`, `status`
+and endpoint, and `diag_slow`, tagged by which phase dominated.
+
+Failures and slow requests also print a line:
+
+```
+[diag] GET /alarms status=0 error_code=1050 error="request timeout"   duration=0ms summed=10070ms dominant=blocked(100%)   server_accountable=false blocked=10070ms
+```
+
+`server_accountable=false` is the field to look at first. If a ten-second
+request is ten seconds of `waiting`, the application is lying in its own logs.
+If it is ten seconds of `blocked`, it never reached the application — which is
+where DEF-08's evidence currently points, and this is what would turn that
+direction into a finding.
+
+`error_code` is k6's own, and was never recorded before. Status `0` alone
+cannot distinguish a timeout from a refused dial; the code can.
+
+**Verify the wiring before a long run.** `k6 run k6/smoke.js` records too, at
+one virtual user. The classifier is unit-tested in
+[`tests/smoke/k6Diagnostics.api.spec.ts`](../tests/smoke/k6Diagnostics.api.spec.ts),
+including against DEF-08's own numbers, so the logic is checked even where k6
+is not installed.
+
 ## Results
 
 [`results/`](results/) holds the write-up of each run: what was measured, what
