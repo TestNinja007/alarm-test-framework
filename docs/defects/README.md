@@ -53,7 +53,7 @@ container.
 | [DEF-16](#def-16) | A failing mail check reported no reason | Low | P3 | Fixed | While diagnosing DEF-02 |
 | [DEF-17](#def-17) | Sixteen requirements are cited by the test cases and written down nowhere | Low | P2 | Fixed | Documentation review |
 | [DEF-18](#def-18) | Authentication throughput is bounded by scrypt on four threads | Informational | — | By design | Load test |
-| [DEF-19](#def-19) | A database connection the pool cannot obtain becomes an unhandled 500 | Medium | P2 | **Open** | **Automated test** |
+| [DEF-19](#def-19) | A database connection the pool cannot obtain becomes an unhandled 500 | Medium | P2 | Fixed | **Automated test** |
 | [DEF-20](#def-20) | Completing registration, and completing a password reset, answered 500 | High | P1 | Fixed | **Automated test** |
 | [DEF-21](#def-21) | The sign-in form had no client-side field validation, contrary to A-02 | Low | P3 | Fixed | **Automated test** |
 | [DEF-22](#def-22) | The create wizard scrolled sideways at phone width | Medium | P2 | Fixed | **Automated test** |
@@ -74,10 +74,10 @@ accumulates correct diagnoses is a register nobody checked.
 | Exploratory use, deployed | 1 |
 | Production log review | 1 |
 | Deployment failure | 1 |
-| Automated test | 5 |
+| Automated test | 6 |
 | While diagnosing another defect | 1 |
 
-**Five defects were found by the automated suite.** That number is low for a
+**Six defects were found by the automated suite.** That number is low for a
 reason worth stating rather than hiding: the suite was written after the
 product, so it inherited an application whose obvious faults had already been
 exercised by hand. Its value is the next twenty-two, not these. And the first it
@@ -920,7 +920,7 @@ first.
 | --- | --- |
 | Severity | Medium |
 | Priority | P2 |
-| Status | **Open** |
+| Status | Fixed — `2c28e4e` |
 | Component | `src/api/src/db/pool.ts`, error handling |
 | Requirement | — (non-functional) |
 | Environment | Local, a process that had been up about three hours |
@@ -959,9 +959,38 @@ made the suite fail. That is the change working, not misfiring: a hang is not
 better than an error, it is only quieter. But the fix was half of one, and
 this entry is the other half.
 
-**Regression coverage.** Incidental and strong: any spec that creates a
-throwaway account fails when this returns, which is most of the suite. Nothing
-asserts the *status code*, which is the part being complained about here.
+**The fix.** `pool.query`, and the `connect` inside `withTransaction`, now
+translate an acquisition failure into a 503 carrying `Retry-After` — caught
+where it is raised rather than at the generic handler, as this entry asked. The
+handler logs it as a warning, because an unavailable database is an operational
+event worth seeing in the logs; that much the 500 got right.
+
+Recognition is matched on the error *message*, because node-postgres gives an
+acquisition timeout no code. That is fragile and the fragility points one way:
+a message they rename stops being recognised and the caller gets the old 500
+back — the behaviour being replaced, not something worse.
+
+**Regression coverage, in two halves.** Seven unit tests in
+`acquisitionFailure.test.ts` name the three messages this depends on, so a
+rename upstream breaks a test instead of quietly restoring the defect.
+
+The other half is the one that must not be got wrong: an error carrying a
+`code` is a real query error and travels untouched, *even when its message
+mentions a timeout*. Translating too eagerly would turn genuine faults into
+"try again", and a caller would retry forever against a request that can never
+succeed. The suite confirms that end to end — every conflict case still
+answers 409.
+
+**What is not covered.** No spec drives a real pool exhaustion and asserts the
+503 over HTTP; doing so would need a fault-injection hook in the application,
+which was not added. The status and the header are pinned at the point they
+are decided, which is where a regression would originate, and the end-to-end
+path keeps the incidental coverage it always had: any spec that creates a
+throwaway account fails if this returns.
+
+**This fixed the reporting, not the cause.** Connections are still dying and
+the pool is still not recovering over hours. That remains with
+[DEF-08](#def-08).
 
 ---
 

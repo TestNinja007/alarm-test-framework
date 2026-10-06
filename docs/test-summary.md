@@ -15,8 +15,8 @@ cases are automated, covering 33 of 34 requirements. Twenty-five of the
 twenty-six P1 cases have a spec; the twenty-sixth is what a desktop
 notification looks like, which is outside anything a browser can see.
 
-Twenty-two defects have been found and nineteen fixed. The two still open are
-Medium, and one of them has no established cause rather than merely no fix.
+Twenty-two defects have been found and twenty fixed. One remains open:
+DEF-08, which has no established cause rather than merely no fix.
 
 **One requirement is deliberately uncovered.** R-26, within-day repetition,
 sits behind a paid tier, and
@@ -87,11 +87,11 @@ part of DEF-08 rather than silently worked around with retries.
 | --- | --- | --- |
 | Critical | 2 | 0 |
 | High | 6 | 0 |
-| Medium | 6 | 2 |
+| Medium | 6 | 1 |
 | Low | 7 | 0 |
 | Informational | 1 | — |
 
-Twenty-two found, nineteen fixed, two open, one recorded as by design.
+Twenty-two found, twenty fixed, one open, one recorded as by design.
 
 **Five were found by the automated suite**, all of them faults nobody had hit
 by using the application:
@@ -144,7 +144,9 @@ High defects, every in-scope requirement traceable to a spec, and the suite
 green on the target branch.
 
 One honest caveat to ship alongside, and it is not R-26: DEF-08 is a
-reproducible performance fault with no established cause. That belongs in a
+reproducible performance fault with no established cause. Its reporting is at
+least correct now - DEF-19 made the pool failure it produces answer 503 rather
+than an unhandled 500 - but correct reporting of a fault is not a fix for it. That belongs in a
 release note rather than a footnote. R-26 is uncovered on purpose, which is a
 different sentence and should be read as one.
 
@@ -153,8 +155,7 @@ different sentence and should be read as one.
 In order of what it would buy:
 
 1. A cause for DEF-08, or a decision to accept it with the evidence attached.
-2. Handling the pool failure in DEF-19 as a 503 rather than an unhandled 500.
-3. Either run the compose stack once or stop the README leading with it. It is
+2. Either run the compose stack once or stop the README leading with it. It is
    the first command offered for running the application locally and has never
    been executed. Not a production concern - Render deploys the Node runtime
    and `render.yaml` says so explicitly, because the Dockerfile was never
