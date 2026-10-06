@@ -279,15 +279,27 @@ def test_the_migration_ledger_records_every_file_that_exists(db):
     recorded = {r["filename"] for r in db.rows("SELECT filename FROM schema_migrations")}
     assert recorded, "schema_migrations should not be empty"
 
-    migrations_dir = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        "..",
-        "alarm-configurator",
-        "db",
-        "migrations",
+    # The application is checked out in different places depending on who is
+    # running this: beside the framework locally, and under `app/` in CI.
+    #
+    # An earlier version knew only the local path, so it skipped on every CI
+    # run - passing locally and never running where it mattered, which is the
+    # exact failure this file complains about elsewhere. Found by reading a CI
+    # log rather than by anything going red.
+    repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    candidates = [
+        os.environ.get("APP_MIGRATIONS_DIR"),
+        os.path.join(repo, "..", "alarm-configurator", "db", "migrations"),
+        os.path.join(repo, "app", "db", "migrations"),
+    ]
+    migrations_dir = next(
+        (c for c in candidates if c and os.path.isdir(c)), None
     )
-    if not os.path.isdir(migrations_dir):
-        pytest.skip("the application's migrations are not checked out beside this repository")
+    if migrations_dir is None:
+        pytest.skip(
+            "the application's migrations are not checked out anywhere this "
+            "test looks: " + str([c for c in candidates if c])
+        )
 
     on_disk = {f for f in os.listdir(migrations_dir) if f.endswith(".sql")}
 
