@@ -1,23 +1,20 @@
-import { test, expect, describeWithDatabase } from '../../src/fixtures.js';
+import { test, expect } from '../../src/fixtures.js';
 import { ApiClient } from '../../src/support/apiClient.js';
-import { queryRow } from '../../src/support/db.js';
 import { env } from '../../src/support/env.js';
 import { request as playwrightRequest } from '@playwright/test';
 
 /**
- * TC32, TC54, TC55 and TC56 — the security set.
- * Requirements R-17, R-29, R-30, R-34.
+ * TC32, TC54 and TC56 — the security set.
+ * Requirements R-17, R-29, R-34.
  *
- * Four P1 cases that had no spec at all. Each asserts something that is
- * invisible from the interface and expensive to be wrong about: that one
- * account cannot reach another's data, that a stolen cookie alone is not
- * enough to write, that passwords are not recoverable from the database, and
+ * Three P1 cases that had no spec at all. Each asserts something invisible
+ * from the interface and expensive to be wrong about: that one account cannot
+ * reach another's data, that a stolen cookie alone is not enough to write, and
  * that resetting a password actually ends the sessions it was meant to end.
  *
- * Two of them read the database directly, which is the one place in this
- * suite where that is the right instrument rather than a shortcut: no API
- * will ever tell you what a password column contains, and that is the point
- * of the question.
+ * TC55 — that a password is not recoverable from what is stored — moved to
+ * `database/`. It is the clearest case for that stack existing: no API will
+ * ever tell you what a password column contains, and that is the question.
  */
 
 const alarm = (name: string) => ({
@@ -130,47 +127,5 @@ test.describe('authorisation and sessions @security', () => {
 
     await firstContext.dispose();
     await secondContext.dispose();
-  });
-});
-
-describeWithDatabase('stored credentials @security @db', () => {
-  test('TC55: a password is stored as a scrypt hash and is not recoverable from it', async ({
-    freshUser,
-  }) => {
-    const row = await queryRow<{ password_hash: string }>(
-      'SELECT password_hash FROM users WHERE email = $1',
-      [freshUser.email],
-    );
-    expect(row, 'the account should exist').toBeTruthy();
-    const stored = row!.password_hash;
-
-    // scrypt$N$r$p$<salt base64>$<hash base64> — the parameters are stored
-    // with it so the cost can be raised later without invalidating anyone.
-    expect(stored, 'the stored credential should be a parameterised scrypt hash').toMatch(
-      /^scrypt\$\d+\$\d+\$\d+\$[A-Za-z0-9+/=]+\$[A-Za-z0-9+/=]+$/,
-    );
-
-    const [, n, r, p] = stored.split('$');
-    expect(Number(n), 'the cost parameter should be the memory-hard one').toBeGreaterThanOrEqual(
-      16384,
-    );
-    expect(Number(r)).toBeGreaterThanOrEqual(8);
-    expect(Number(p)).toBeGreaterThanOrEqual(1);
-
-    // The password itself appears nowhere in it, in any obvious encoding.
-    expect(stored).not.toContain(freshUser.password);
-    expect(stored).not.toContain(Buffer.from(freshUser.password).toString('base64'));
-    expect(stored).not.toContain(Buffer.from(freshUser.password).toString('hex'));
-
-    // And no other column is quietly holding it either.
-    const anywhere = await queryRow<{ hit: string | null }>(
-      `SELECT string_agg(column_name, ',') AS hit
-         FROM information_schema.columns
-        WHERE table_name = 'users' AND column_name ILIKE '%password%'`,
-    );
-    expect(
-      (anywhere?.hit ?? '').split(',').filter(Boolean),
-      'password_hash should be the only password-ish column on users',
-    ).toEqual(['password_hash']);
   });
 });

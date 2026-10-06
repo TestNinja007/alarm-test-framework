@@ -2,7 +2,6 @@ import { test as base, expect, request as playwrightRequest } from '@playwright/
 import type { APIRequestContext, Page } from '@playwright/test';
 import { ApiClient } from './support/apiClient.js';
 import { TestHooks, type ThrowawayUser } from './support/testHooks.js';
-import { databaseAvailable } from './support/db.js';
 import { env } from './support/env.js';
 
 /**
@@ -181,13 +180,5 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     await context.close();
   },
 });
-
-/** Skips a spec when direct database access was not configured. */
-export const describeWithDatabase = (title: string, body: () => void): void => {
-  test.describe(title, () => {
-    test.skip(!databaseAvailable(), 'DATABASE_URL is not set');
-    body();
-  });
-};
 
 export { expect };

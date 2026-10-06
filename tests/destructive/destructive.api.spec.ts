@@ -1,19 +1,17 @@
-import { test, expect, describeWithDatabase } from '../../src/fixtures.js';
-import { ApiClient } from '../../src/support/apiClient.js';
-import { countRows } from '../../src/support/db.js';
-import { env } from '../../src/support/env.js';
-import { request as playwrightRequest } from '@playwright/test';
+import { test, expect } from '../../src/fixtures.js';
 
 /**
- * TC30, TC51, TC52 and TC53 — the destructive set.
- * Requirements R-10, R-19, R-34.
+ * TC30 and TC53 — deleting things through the interface's own guard.
+ * Requirements R-10, R-34.
  *
- * Deletion is the operation with no second chance, and the one where a test
- * that only asks the API what it can see is not enough: a cascade that
- * removes a row from one table and orphans it in another looks identical
- * through the interface, right up until a foreign key or a report finds it
- * months later. Three of these four read the database afterwards for that
- * reason.
+ * What is left here is what the API can answer for itself: that an
+ * unconfirmed delete is refused and says how many alarms would go, and that
+ * deleting one alarm leaves its group and siblings alone.
+ *
+ * TC51 and TC52 used to live here and now live in `database/`. Both ask
+ * whether the rows are really gone or merely unreachable, which is a question
+ * for SQL - an API can report rows gone simply by filtering on a parent that
+ * no longer exists. See CLAUDE.md on the two stacks.
  *
  * The guard matters as much as the deletion. R-10 refuses an unconfirmed
  * delete and reports how many alarms would go with the group — a number
@@ -87,78 +85,5 @@ test.describe('deleting things @destructive', () => {
 
     const folders = await freshApi.json<{ items: Folder[] }>(await freshApi.get('/folders'));
     expect(folders.items.map((f) => f.id), 'the group survives its alarm').toContain(folder.id);
-  });
-});
-
-describeWithDatabase('deleting things, checked in the database @destructive @db', () => {
-  test('TC51: deleting a group deletes its alarms rather than orphaning them', async ({
-    freshApi,
-  }) => {
-    const folder = await freshApi.json<Folder>(
-      await freshApi.post('/folders', { name: `Cascade ${Date.now()}` }),
-    );
-    await freshApi.json(await freshApi.post('/alarms', alarmIn(folder.id, 'First', '05:05')));
-    await freshApi.json(await freshApi.post('/alarms', alarmIn(folder.id, 'Second', '05:10')));
-
-    expect(await countRows('alarms', 'folder_id = $1', [folder.id])).toBe(2);
-
-    const deleted = await freshApi.delete(`/folders/${folder.id}?confirm=true`);
-    expect(deleted.ok(), 'a confirmed delete should succeed').toBeTruthy();
-
-    const folders = await freshApi.json<{ items: Folder[] }>(await freshApi.get('/folders'));
-    expect(folders.items.map((f) => f.id)).not.toContain(folder.id);
-
-    /*
-     * The API could report them gone simply by filtering on a group that no
-     * longer exists. This is the question the API cannot answer: are the rows
-     * actually gone, or are they still there pointing at nothing.
-     */
-    expect(
-      await countRows('alarms', 'folder_id = $1', [folder.id]),
-      'no alarm should still reference the deleted group',
-    ).toBe(0);
-  });
-
-  test('TC52: deleting an account removes everything it owned', async ({ freshUser }) => {
-    const context = await playwrightRequest.newContext({ baseURL: env.baseUrl });
-    const client = new ApiClient(context);
-    await client.signIn(freshUser.email, freshUser.password);
-
-    const me = await client.json<{ user: { id: string } }>(await client.get('/auth/me'));
-    const userId = me.user.id;
-
-    const folder = await client.json<Folder>(await client.post('/folders', { name: 'Everything' }));
-    await client.json(await client.post('/alarms', alarmIn(folder.id, 'Owned', '04:05')));
-    await client.json(
-      await client.post('/alarms', {
-        name: 'Unfiled and owned',
-        timeOfDay: '04:10',
-        timezone: 'UTC',
-        startDate: '2027-03-01',
-        rule: { type: 'daily' },
-      }),
-    );
-
-    expect(await countRows('folders', 'user_id = $1', [userId])).toBe(1);
-    expect(await countRows('alarms', 'user_id = $1', [userId])).toBe(2);
-
-    const deleted = await client.delete('/me?confirm=true', { password: freshUser.password });
-    expect(
-      deleted.ok(),
-      `deleting the account should succeed — ${deleted.status()} ${await deleted.text()}`,
-    ).toBeTruthy();
-
-    await context.dispose();
-
-    // It cannot sign in again.
-    const after = await playwrightRequest.newContext({ baseURL: env.baseUrl });
-    const stale = new ApiClient(after);
-    const signIn = await stale.signIn(freshUser.email, freshUser.password);
-    expect(signIn.status(), 'a deleted account should not sign in').toBe(401);
-    await after.dispose();
-
-    // And it owns nothing, in either table.
-    expect(await countRows('folders', 'user_id = $1', [userId]), 'no groups remain').toBe(0);
-    expect(await countRows('alarms', 'user_id = $1', [userId]), 'no alarms remain').toBe(0);
   });
 });

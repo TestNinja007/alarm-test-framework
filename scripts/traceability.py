@@ -22,6 +22,10 @@ import re
 import sys
 from collections import defaultdict
 
+# One spec-finding implementation, shared, because two copies of that
+# regex already made the matrix under-report once.
+from specscan import playwright_specs, pytest_specs, specs
+
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -60,24 +64,6 @@ def cases_from_mapping(path):
     return found
 
 
-def specs(tests_dir):
-    """Case id → [(spec file, test title)] for everything automated."""
-    automated = defaultdict(list)
-    for root, _dirs, files in os.walk(tests_dir):
-        for name in files:
-            if not name.endswith('.spec.ts'):
-                continue
-            path = os.path.join(root, name)
-            relative = os.path.relpath(path, HERE).replace('\\', '/')
-            for line in io.open(path, encoding='utf-8'):
-                # Either quote style: a title containing an apostrophe is
-                # written with double quotes, and matching only single ones
-                # made those specs invisible to the matrix while they ran
-                # perfectly well.
-                match = re.search(r"""test\(\s*['\"](TC(\d+)[a-z]?):\s*(.+?)['\"]""", line)
-                if match:
-                    automated[int(match.group(2))].append((relative, match.group(1), match.group(3)))
-    return automated
 
 
 def main():
@@ -94,7 +80,7 @@ def main():
     reqs = requirements(app_readme)
     cases = cases_from_mapping(os.path.join(HERE, 'docs', 'test-cases', 'requirement-mapping.md'))
     cases.update(cases_from_csvs(os.path.join(HERE, 'docs', 'test-cases')))
-    automated = specs(os.path.join(HERE, 'tests'))
+    automated = specs()
 
     by_requirement = defaultdict(list)
     for case, (title, case_reqs, tags) in cases.items():
@@ -127,7 +113,22 @@ def main():
     w(f'| With at least one automated spec | {verified} |')
     w(f'| Cases designed | {len(cases)} |')
     w(f'| Cases automated | {len(automated)} |')
-    w(f'| Specs | {sum(len(v) for v in automated.values())} |\n')
+    playwright = sum(len(v) for v in playwright_specs(os.path.join(HERE, 'tests')).values())
+    by_case, extras = pytest_specs(os.path.join(HERE, 'database'))
+    database = sum(len(v) for v in by_case.values())
+    w(f'| Specs | {playwright + database} |')
+    w(f'| …Playwright, UI and API | {playwright} |')
+    w(f'| …pytest, the database layer | {database} |' + chr(10))
+
+    # Database tests answering no designed case are real coverage and are
+    # counted apart rather than folded in: a case number is not mine to
+    # invent, and hiding them would understate the layer.
+    if extras:
+        w(f'The database layer also holds **{len(extras)} tests that answer no '
+          'designed case** — referential integrity as the schema declares it, how '
+          'values are stored, and whether the stored rule matches the returned '
+          'one. Real coverage with no case number, so counted separately rather '
+          'than folded in.' + chr(10))
 
     # A "none" in the matrix is a fact without a reason, and the reasons are
     # decisions rather than data - so they are written down once, by hand, and

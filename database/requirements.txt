@@ -1,0 +1,13 @@
+# The database layer's own stack.
+#
+# psycopg 3 rather than psycopg2: it speaks the same protocol, has a sane
+# connection API, and its binary wheel needs no local PostgreSQL build tools -
+# which matters on Windows, where this suite is developed.
+psycopg[binary]==3.2.3
+
+# For acting through the API before looking at rows. These tests are "do
+# something, then check what was stored", so they need an HTTP client; it is
+# deliberately not a second test framework.
+requests==2.32.3
+
+pytest==8.3.4

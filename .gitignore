@@ -11,3 +11,8 @@ playwright/.cache/
 /playwright-report/
 /playwright/.cache/
 .env
+
+# The database layer's Python artefacts.
+__pycache__/
+*.py[cod]
+.pytest_cache/

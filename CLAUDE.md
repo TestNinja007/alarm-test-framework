@@ -21,12 +21,15 @@ Two stacks, split on purpose.
 | **Playwright + TypeScript** | UI specs across Chromium, Firefox and WebKit, with the API tests as the oracle behind them |
 | **pytest** | the database layer — query PostgreSQL directly after API and UI actions, compare result sets, check referential integrity, and check recurrence data **as stored** rather than as returned |
 
-A direct SQL assertion belongs in pytest. It does not belong in a Playwright
-`@db` spec, however convenient the TypeScript helper is.
+A direct SQL assertion belongs in pytest, in [`database/`](database/). The
+TypeScript `pg` helper that used to make this easy to get wrong has been
+deleted, along with the `@db` tag and the `describeWithDatabase` fixture.
 
 *Agreed 6 October 2026.* Before it was written down, TC51, TC52 and TC55 were
-built as Playwright specs against a TypeScript `pg` helper — the wrong side of
-this line.
+built as Playwright specs against that helper — the wrong side of this line.
+They now live in `database/tests/`, and the traceability matrix credits them
+there: [`scripts/specscan.py`](scripts/specscan.py) reads both stacks, so a
+case automated in pytest counts exactly as one automated in Playwright.
 
 ## Test cases live in TestQuality
 
@@ -97,10 +100,14 @@ about the application — that mistake left the application's CI red for four
 commits.
 
 ```bash
-npm test                      # this suite: api, then browsers, then @serial
+npm test                      # Playwright: api, then browsers, then @serial
 npx tsc --noEmit              # this suite's types
+cd database && python -m pytest tests     # the database layer
 cd ../alarm-configurator && npm run lint && npm run typecheck && npm test
 ```
+
+Both stacks, every time. A green Playwright run says nothing about whether the
+rows are right.
 
 ## Measurement
 

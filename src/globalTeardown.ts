@@ -1,6 +1,5 @@
 import { request } from '@playwright/test';
 import { TestHooks } from './support/testHooks.js';
-import { closeDatabase } from './support/db.js';
 import { env } from './support/env.js';
 
 /**
@@ -29,6 +28,5 @@ export default async function globalTeardown(): Promise<void> {
     // has already reported, and this is housekeeping.
   } finally {
     await context.dispose();
-    await closeDatabase();
   }
 }

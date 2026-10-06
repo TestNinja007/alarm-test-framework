@@ -81,11 +81,14 @@ src/
     apiClient.ts        sessions and the CSRF header
     testHooks.ts        /test/* — reset, clock, throwaway users, mail
     db.ts               direct SQL, for what the API cannot assert
-tests/
+tests/                  Playwright: the interface, and the API behind it
   alarms/               creating, editing, deleting, switching off
   auth/                 signing in
   groups/               groups, and what deleting one takes with it
   smoke/                checks on the framework itself
+database/               pytest: the database layer
+  conftest.py           a connection, and enough HTTP to make rows exist
+  tests/                cascades, storage, recurrence as stored
 docs/
   test-cases/           cases exported from TestQuality
   defects/              every defect found, how it was found, what guards it
@@ -114,6 +117,11 @@ python scripts/mark-automated.py
 The first rewrites [the matrix](docs/traceability.md). The second sets
 `test_is_automated` in the TestQuality exports so they can be imported back,
 and reports anything automated that the exports do not know about.
+
+Both read the specs through [`scripts/specscan.py`](scripts/specscan.py), which
+looks in **both** stacks — a case automated in pytest counts exactly as one
+automated in Playwright. One implementation, because two copies of that regex
+already made the matrix under-report once.
 
 Neither touches test design. `mark-automated.py` writes exactly one column -
 the cases, steps, expected results and labels are yours, and a field-by-field
@@ -181,10 +189,14 @@ alone cannot tell a saved record from a cached row.
 fill in the sign-in form are thirty specs that fail when that form breaks,
 which tells you nothing the one spec testing sign-in did not.
 
-**The database is a last resort.** Asserting through the API exercises what a
-user reaches. Direct SQL is for the questions the API cannot answer — whether a
-cascade truly removed rows, whether a column really holds UTC. Those specs are
-tagged `@db` and skip when `DATABASE_URL` is unset.
+**The database has its own stack.** Asserting through the API exercises what a
+user reaches, and there are questions it simply cannot answer: whether a
+cascade truly removed rows or merely made them unreachable, whether a column
+really holds a zone, whether what was stored matches what was returned.
+
+Those live in [`database/`](database/) and are pytest, not Playwright. It is a
+different kind of assertion made with a different tool, which is why it is a
+second stack rather than a tag on this one — see [CLAUDE.md](CLAUDE.md).
 
 ## What is not under test
 
@@ -217,7 +229,30 @@ speech, waiting for the scheduler — already exists for
 | `@smoke` | the framework's own checks, or a minimal product check |
 | `@ui` | drives the interface in a browser, rather than the API |
 | `@serial` | pins the clock, so it cannot run beside anything else |
-| `@db` | needs direct database access |
+
+## The database layer
+
+```bash
+python -m pip install -r database/requirements.txt
+cd database && python -m pytest tests -v
+```
+
+It reads the same `.env` this suite does, so both stacks are pointed at one
+instance and one database by construction rather than by agreement. Without
+`DATABASE_URL` it skips — locally that is a configuration choice, and CI
+refuses to let it skip, because there a missing database is a broken workflow
+rather than a decision.
+
+Every test has the same shape: act through the API, then query PostgreSQL. The
+HTTP client in `conftest.py` exists only to make rows exist; assertions about
+status codes and response bodies belong in the Playwright suite.
+
+| Marker | What it covers |
+| --- | --- |
+| `cascade` | referential integrity — what deleting a row takes with it, declared and exercised |
+| `storage` | how a value is stored, as opposed to what the API returns |
+| `recurrence` | recurrence data as the engine persisted it |
+| `smoke` | the layer's own plumbing, including that `BASE_URL` and `DATABASE_URL` are the same system |
 
 ## Continuous integration
 

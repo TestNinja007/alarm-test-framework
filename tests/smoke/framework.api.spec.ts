@@ -1,7 +1,6 @@
 import { request } from '@playwright/test';
-import { test, expect, describeWithDatabase } from '../../src/fixtures.js';
+import { test, expect } from '../../src/fixtures.js';
 import { ApiClient } from '../../src/support/apiClient.js';
-import { countRows } from '../../src/support/db.js';
 import { env } from '../../src/support/env.js';
 
 /**
@@ -74,15 +73,5 @@ test.describe('framework plumbing @smoke', () => {
     await hooks.releaseClock();
     const afterwards = await hooks.health();
     expect(afterwards.clock.mode).toBe('system');
-  });
-});
-
-describeWithDatabase('database access @smoke @db', () => {
-  test('the suite can query the database directly', async () => {
-    // Enough to prove the connection and credentials work. Assertions about
-    // product behaviour belong in the designed cases.
-    const users = await countRows('users');
-
-    expect(users).toBeGreaterThan(0);
   });
 });

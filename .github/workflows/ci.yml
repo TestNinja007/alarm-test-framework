@@ -169,10 +169,157 @@ jobs:
   # open Actions, find the run, download a zip and open it locally. Merging the
   # blobs into a single HTML report and putting it on Pages makes that one
   # click, and keeps every engine's result in one place.
+  # The database layer, in its own stack and its own job.
+  #
+  # Separate from `suite` rather than a fifth entry in its matrix: it needs no
+  # browser and no Node, it is finished in seconds, and a failure here means
+  # something quite different from a failing UI spec - the rows are wrong
+  # rather than the screen is. See CLAUDE.md on why there are two stacks.
+  database:
+    name: database
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: alarm_app
+          POSTGRES_PASSWORD: alarm_app
+          POSTGRES_DB: alarm_configurator
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U alarm_app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      BASE_URL: http://127.0.0.1:8080
+      DATABASE_URL: postgresql://alarm_app:alarm_app@127.0.0.1:5432/alarm_configurator
+
+    steps:
+      - name: Check out the framework
+        uses: actions/checkout@v4
+
+      - name: Check out the application under test
+        uses: actions/checkout@v4
+        with:
+          repository: TestNinja007/alarm-configurator
+          path: app
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: database/requirements.txt
+
+      - name: Build the application
+        working-directory: app
+        run: |
+          npm ci --include=dev
+          npm run build
+
+      - name: Apply the migrations
+        working-directory: app
+        run: npm run migrate
+
+      - name: Start the application
+        working-directory: app
+        env:
+          NODE_ENV: test
+          PORT: 8080
+          TEST_SUPPORT: '1'
+          SEED_ON_START: always
+          SEED_PROFILE: demo
+          REGISTRATION_OPEN: '1'
+          MAIL_TRANSPORT: capture
+          TTS_PROVIDER: none
+          SESSION_SECRET: ci-session-secret-at-least-32-characters-long
+          LOG_LEVEL: warn
+        run: |
+          node src/api/dist/boot.js > ../app.log 2>&1 &
+          echo $! > ../app.pid
+
+      - name: Wait for the application to be ready
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS "$BASE_URL/api/v1/health" > /dev/null 2>&1; then
+              echo "Ready after ${i}s."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "The application never became ready. Its log:"
+          cat app.log
+          exit 1
+
+      - name: Install the database layer
+        run: python -m pip install -r database/requirements.txt
+
+      # These tests skip themselves without DATABASE_URL, which is right
+      # locally and wrong here: in CI a missing database is a broken workflow,
+      # not a configuration choice, and skipping would make it look green.
+      - name: Refuse to pass by skipping
+        run: |
+          test -n "$DATABASE_URL" || { echo "DATABASE_URL is unset in CI."; exit 1; }
+
+      - name: Run the database layer
+        working-directory: database
+        run: python -m pytest tests -v --junit-xml=../database-results.xml
+
+      - name: Put the results on the run page
+        if: always()
+        run: |
+          python - <<'PY'
+          import os, xml.etree.ElementTree as ET
+          path = 'database-results.xml'
+          if not os.path.exists(path):
+              raise SystemExit(0)
+          suite = ET.parse(path).getroot().find('testsuite') or ET.parse(path).getroot()
+          total = int(suite.get('tests', 0))
+          failed = int(suite.get('failures', 0)) + int(suite.get('errors', 0))
+          skipped = int(suite.get('skipped', 0))
+          summary = os.environ.get('GITHUB_STEP_SUMMARY')
+          verdict = 'All passing' if failed == 0 else f'{failed} failing'
+          lines = [
+              '### database layer',
+              '',
+              f'{verdict} - {total} tests, {skipped} skipped.',
+              '',
+          ]
+          if failed:
+              lines.append('| Test | Why |')
+              lines.append('| --- | --- |')
+              for case in suite.iter('testcase'):
+                  for bad in list(case.iter('failure')) + list(case.iter('error')):
+                      why = (bad.get('message') or '').strip().splitlines()[:1]
+                      lines.append(f"| `{case.get('name')}` | {(why[0] if why else '')[:140]} |")
+          if summary:
+              with open(summary, 'a', encoding='utf-8') as handle:
+                  handle.write('\n'.join(lines) + '\n')
+          PY
+
+      - name: Upload the application log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-log-database
+          path: app.log
+          retention-days: 7
+
   report:
     name: report
     if: always()
-    needs: suite
+    needs: [suite, database]
     runs-on: ubuntu-latest
     timeout-minutes: 10
 

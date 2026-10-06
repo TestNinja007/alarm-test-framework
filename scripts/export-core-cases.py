@@ -38,7 +38,7 @@ import sys
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(HERE, 'scripts'))
 
-from traceability import specs  # noqa: E402
+from specscan import specs  # noqa: E402
 
 CASES = os.path.join(HERE, 'docs', 'test-cases')
 MAPPING = os.path.join(CASES, 'requirement-mapping.md')
@@ -85,7 +85,7 @@ def already_exported():
 
 
 def main():
-    automated = specs(os.path.join(HERE, 'tests'))
+    automated = specs()
     exported = already_exported()
 
     rows = []
