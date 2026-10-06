@@ -10,7 +10,7 @@ maintained alongside the work.
 **Released, with two known defects and one requirement the product will not
 let anyone test.** That last clause is the interesting one.
 
-165 automated tests pass on every push across five jobs. 57 of 61 designed
+192 automated tests pass on every push across five jobs. 57 of 61 designed
 cases are automated, covering 33 of 34 requirements. Twenty-five of the
 twenty-six P1 cases have a spec; the twenty-sixth is what a desktop
 notification looks like, which is outside anything a browser can see.
@@ -37,9 +37,9 @@ attempted, are what a new user meets on their first day.
 | chromium | 27 | Playwright | the interface |
 | firefox | 27 | Playwright | the interface |
 | webkit | 27 | Playwright | the interface |
-| database | 35 | pytest | the rows, read directly |
+| database | 62 | pytest | the rows, read directly |
 
-165 in all per CI run, on Node 24, Python 3.13 and PostgreSQL 18, against the
+192 in all per CI run, on Node 24, Python 3.13 and PostgreSQL 18, against the
 application built from source on the same runner.
 
 Two stacks on purpose. Playwright drives the interface with the API tests as

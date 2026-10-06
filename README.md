@@ -263,6 +263,13 @@ database.
 | `recurrence` | recurrence data as the engine persisted it |
 | `smoke` | the layer's own plumbing, including that `BASE_URL` and `DATABASE_URL` are the same system |
 
+Every table in the schema is examined, which is the completeness test worth
+having: five of the ten were untouched when this layer was first written, and
+three of those five hold live credentials. Sessions, verification codes and
+reset codes are where the gap between "the API refuses it" and "the row is
+gone" matters most — a session the API rejects but the table still holds is a
+credential waiting for a bug in the rejecting code.
+
 Result sets get their own attention: that a list holds exactly the rows SQL
 says it should, that `total` counts the set rather than the page, and that
 paging one row at a time returns every row once — including when several share

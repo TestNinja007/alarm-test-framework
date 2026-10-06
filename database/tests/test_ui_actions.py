@@ -154,3 +154,70 @@ class TestTheInterfaceRemembersWhereYouWere:
             page.wait_for_timeout(300)
 
         assert db.count("ui_state", "user_id = %s", (api.user_id,)) <= 1
+
+
+class TestAnAlarmCreatedThroughTheWizard:
+    """
+    The main event, done the way a person does it.
+
+    Every other alarm in this directory was created with one API call, which
+    is the right shortcut when the question is about a column. It is the wrong
+    shortcut for this question: the wizard composes the rule, the timezone and
+    the dates across four steps, and what it finally sends is its own
+    construction. An API call made by a test asserts what the test author
+    believed the interface sends.
+    """
+
+    def test_the_stored_row_is_what_the_wizard_composed(self, page, db, api, unique):
+        name = "Through the wizard " + unique
+
+        _open_the_wizard(page)
+        page.get_by_test_id("alarm-name-input").fill(name)
+        page.get_by_test_id("alarm-speech-text-input").fill("Stand up and stretch")
+        page.get_by_test_id("wizard-next-button").click()
+
+        page.get_by_test_id("alarm-timezone-input").fill("Europe/London")
+        page.get_by_test_id("alarm-time-input").fill("09:15")
+        page.get_by_test_id("alarm-start-date-input").fill("2027-01-04")
+        page.get_by_test_id("wizard-next-button").click()
+
+        # Repetition, left at its default.
+        page.get_by_test_id("wizard-next-button").click()
+
+        page.get_by_test_id("wizard-submit-button").click()
+
+        row = None
+        for _ in range(40):
+            row = db.row(
+                """SELECT name, time_of_day, timezone, start_date, rule, folder_id,
+                          speech_text, enabled, self_destruct
+                     FROM alarms WHERE user_id = %s AND name = %s""",
+                (api.user_id, name),
+            )
+            if row is not None:
+                break
+            page.wait_for_timeout(250)
+
+        assert row is not None, "completing the wizard should have stored an alarm"
+
+        # Each of these was typed into a form and crossed four steps, a React
+        # state object and a JSON body before reaching the column.
+        assert row["time_of_day"] == "09:15"
+        assert row["timezone"] == "Europe/London", (
+            "the timezone the person chose, not the browser's or the server's"
+        )
+        assert str(row["start_date"]) == "2027-01-04"
+        assert row["speech_text"] == "Stand up and stretch"
+
+        # Entered without choosing a group, so it is ungrouped rather than
+        # filed under something invented on its behalf - R-20.
+        assert row["folder_id"] is None
+
+        # The defaults the wizard applies without being asked.
+        assert row["enabled"] is True, "a new alarm should be on"
+        assert row["self_destruct"] is False
+        assert row["rule"]["type"] == "daily", row["rule"]
+
+        # And the draft it was built from is cleared, so reopening the wizard
+        # does not offer a half-finished copy of an alarm that now exists.
+        assert draft_row(db, api.user_id) is None, "the draft should be consumed on submit"
