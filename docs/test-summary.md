@@ -7,31 +7,36 @@ maintained alongside the work.
 
 ## The short version
 
-The suite is green and the product is not ready to release. Those are
-compatible statements, and saying only the first would be the more common kind
-of report.
+**Released, with two known defects and one requirement the product will not
+let anyone test.** That last clause is the interesting one.
 
-87 automated tests pass on every push across four runners. 32 of 61 designed
-cases are automated, covering 21 of 34 requirements. Twenty defects have been
-found, seventeen fixed. Two remain open and one of those is unexplained rather
-than merely unfixed.
+127 automated tests pass on every push across four runners. 57 of 61 designed
+cases are automated, covering 33 of 34 requirements. Twenty-five of the
+twenty-six P1 cases have a spec; the twenty-sixth is what a desktop
+notification looks like, which is outside anything a browser can see.
 
-**The exit criteria are not met.** Not because something is failing, but
-because thirteen requirements have a designed case and no spec, and a
-requirement nobody has run a test against is untested however green the
-dashboard is.
+Twenty-two defects have been found and nineteen fixed. The two still open are
+Medium, and one of them has no established cause rather than merely no fix.
+
+**R-26 is the one to argue about.** Within-day repetition — one of the
+product's two stated differentiators — is gated to paid tiers, and the only
+account the test hooks can create is on the basic tier. The feature cannot be
+exercised through the interface by any account this suite can obtain. That is
+not a gap in the testing; it is a gap in what the product allows to be
+tested.
 
 ## What was tested
 
 | Project | Tests | Layer |
 | --- | --- | --- |
-| api | 33 | HTTP, no browser |
-| chromium | 18 | the interface |
-| firefox | 18 | the interface |
-| webkit | 18 | the interface |
+| api | 46 | HTTP and direct SQL, no browser |
+| chromium | 27 | the interface |
+| firefox | 27 | the interface |
+| webkit | 27 | the interface |
 
-87 in all per CI run, on Node 24 and PostgreSQL 18, against the application
-built from source on the same runner.
+127 in all per CI run, on Node 24 and PostgreSQL 18, against the application
+built from source on the same runner. Nothing skips: the direct-SQL specs run
+wherever `DATABASE_URL` is set, which CI always does.
 
 Five k6 profiles have been run against a local instance — smoke, load, stress,
 spike and authentication — with Prometheus and Grafana attached for the last
@@ -43,22 +48,18 @@ of them.
 | --- | --- |
 | Requirements | 34 |
 | …with at least one case | 34 |
-| …with at least one automated spec | **21** |
+| …with at least one automated spec | **33** |
 | Cases designed | 61 |
-| Cases automated | **32** |
-| Specs | 40 |
+| Cases automated | **57** |
+| Specs | 64 |
 
-The gap is specific rather than general, which is the useful thing about it.
-Thirteen requirements have a case written and no spec running:
+The four cases without a spec each have a different reason, written up in
+[not-automated.md](test-cases/not-automated.md) rather than totalled: a
+judgement about audio (TC7), a case satisfied by how the suite is arranged
+rather than by a spec (TC8), what the operating system draws (TC46), and the
+tier gate (TC45).
 
-R-08 and R-09 (collision and name uniqueness), R-10 (deleting a group takes
-its alarms), R-14 to R-17 and R-19 (password rules, code expiry and attempts,
-session invalidation, account deletion), R-21 and R-22 (name uniqueness for
-ungrouped alarms and for groups), R-25 and R-26 (voice resolution, closing
-messages), R-27 (self-destructing alarms).
-
-Three of those — R-19, R-17 and R-10 — are destructive or security-relevant
-and are the ones to write next.
+Only TC45 is a gap in coverage rather than a decision about it.
 
 ## Results
 
@@ -82,13 +83,13 @@ part of DEF-08 rather than silently worked around with retries.
 | --- | --- | --- |
 | Critical | 2 | 0 |
 | High | 6 | 0 |
-| Medium | 5 | 2 |
-| Low | 6 | 0 |
+| Medium | 6 | 2 |
+| Low | 7 | 0 |
 | Informational | 1 | — |
 
-Twenty found, seventeen fixed, two open, one recorded as by design.
+Twenty-two found, nineteen fixed, two open, one recorded as by design.
 
-**Three were found by the automated suite**, all of them faults nobody had hit
+**Five were found by the automated suite**, all of them faults nobody had hit
 by using the application:
 
 - An occurrence count of zero accepted as "never ends" — a wrong answer
@@ -98,6 +99,11 @@ by using the application:
   verified perfectly well, so the person is told it failed by an application
   that has just succeeded.
 - A pool connection failure reaching the client as an unhandled 500.
+- A sign-in form with no client-side validation, against a rule the
+  application's own documentation states — found because the case was written
+  from that rule rather than from watching the form.
+- The create wizard scrolling sideways at phone width, because a layout rule
+  that meant to stop fields growing also stopped them shrinking.
 
 The other seventeen came from using the application, reading configuration,
 reading production logs, a failed deploy, a load run, and comparing
@@ -123,28 +129,29 @@ specified; the other half, that the error is unhandled, is a plain defect.
 | --- | --- |
 | The application builds and starts from a clean checkout | yes — CI does it on every run |
 | Test support hooks available in the test environment | yes |
-| Every P1 case has a result | **no** |
+| Every P1 case has a result | 25 of 26; the exception is what the desktop draws |
 | No open Critical or High defects | yes |
 | Automated suite green on the target branch | yes |
-| Requirements traceable to cases and specs | partly — 34 of 34 to cases, 21 of 34 to specs |
+| Requirements traceable to cases and specs | 34 of 34 to cases, 33 of 34 to specs |
 | Performance characterised under load | yes, with one bottleneck unexplained |
 
-**Recommendation: not ready.** The product is in good shape and the testing is
-not finished. The specific thing standing between here and an exit is thirteen
-requirements with designed cases and no spec, three of which are destructive
-or security-relevant.
+**Recommendation: ship it, and say what is not covered.** No open Critical or
+High defects, every requirement traceable, and the one requirement without a
+spec is unverifiable by design rather than unverified by omission.
+
+The honest caveat to ship alongside: R-26 has never been executed by a test,
+and DEF-08 is a reproducible performance fault with no established cause. Both
+belong in a release note, not in a footnote.
 
 ## What would change this report
 
 In order of what it would buy:
 
-1. Specs for R-19, R-17 and R-10 — account deletion, session invalidation after
-   a password reset, and group deletion taking its alarms. All destructive, all
-   currently verified by reading.
-2. Specs for R-14 to R-16 — the registration and verification rules around the
-   path that already has one defect against it.
-3. A cause for DEF-08, or a decision to accept it with the evidence attached.
-4. The remaining 29 cases.
+1. A tier on `POST /test/users`, which unblocks R-26 and with it the product's
+   own differentiator. The notification harness TC45 needs already exists.
+2. A cause for DEF-08, or a decision to accept it with the evidence attached.
+3. Handling the pool failure in DEF-19 as a 503 rather than an unhandled 500.
+4. A container build in CI, which is the one environment nothing verifies.
 
 ## Where the evidence is
 
