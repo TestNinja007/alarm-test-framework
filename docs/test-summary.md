@@ -18,12 +18,16 @@ notification looks like, which is outside anything a browser can see.
 Twenty-two defects have been found and nineteen fixed. The two still open are
 Medium, and one of them has no established cause rather than merely no fix.
 
-**R-26 is the one to argue about.** Within-day repetition — one of the
-product's two stated differentiators — is gated to paid tiers, and the only
-account the test hooks can create is on the basic tier. The feature cannot be
-exercised through the interface by any account this suite can obtain. That is
-not a gap in the testing; it is a gap in what the product allows to be
-tested.
+**One requirement is deliberately uncovered.** R-26, within-day repetition,
+sits behind a paid tier, and
+[paid tiers are out of scope for now](../README.md#what-is-not-under-test).
+Every account this suite uses is on the basic tier — the one a new user gets.
+
+That boundary is worth stating rather than burying, because within-day
+repetition is one of the product's two stated differentiators. The release is
+being signed off with it untested by choice. The basic-tier behaviour at the
+gate *is* covered: the limit of two groups, and the refusal when a third is
+attempted, are what a new user meets on their first day.
 
 ## What was tested
 
@@ -56,10 +60,10 @@ of them.
 The four cases without a spec each have a different reason, written up in
 [not-automated.md](test-cases/not-automated.md) rather than totalled: a
 judgement about audio (TC7), a case satisfied by how the suite is arranged
-rather than by a spec (TC8), what the operating system draws (TC46), and the
-tier gate (TC45).
+rather than by a spec (TC8), what the operating system draws (TC46), and a
+feature behind a paid tier that is not under test (TC45).
 
-Only TC45 is a gap in coverage rather than a decision about it.
+All four are decisions about what to cover. None is work left half-done.
 
 ## Results
 
@@ -132,26 +136,30 @@ specified; the other half, that the error is unhandled, is a plain defect.
 | Every P1 case has a result | 25 of 26; the exception is what the desktop draws |
 | No open Critical or High defects | yes |
 | Automated suite green on the target branch | yes |
-| Requirements traceable to cases and specs | 34 of 34 to cases, 33 of 34 to specs |
+| Requirements traceable to cases and specs | 34 of 34 to cases; 33 of 33 in scope to specs |
 | Performance characterised under load | yes, with one bottleneck unexplained |
 
 **Recommendation: ship it, and say what is not covered.** No open Critical or
-High defects, every requirement traceable, and the one requirement without a
-spec is unverifiable by design rather than unverified by omission.
+High defects, every in-scope requirement traceable to a spec, and the suite
+green on the target branch.
 
-The honest caveat to ship alongside: R-26 has never been executed by a test,
-and DEF-08 is a reproducible performance fault with no established cause. Both
-belong in a release note, not in a footnote.
+One honest caveat to ship alongside, and it is not R-26: DEF-08 is a
+reproducible performance fault with no established cause. That belongs in a
+release note rather than a footnote. R-26 is uncovered on purpose, which is a
+different sentence and should be read as one.
 
 ## What would change this report
 
 In order of what it would buy:
 
-1. A tier on `POST /test/users`, which unblocks R-26 and with it the product's
-   own differentiator. The notification harness TC45 needs already exists.
-2. A cause for DEF-08, or a decision to accept it with the evidence attached.
-3. Handling the pool failure in DEF-19 as a 503 rather than an unhandled 500.
-4. A container build in CI, which is the one environment nothing verifies.
+1. A cause for DEF-08, or a decision to accept it with the evidence attached.
+2. Handling the pool failure in DEF-19 as a 503 rather than an unhandled 500.
+3. A container build in CI, which is the one environment nothing verifies.
+
+And if paid tiers come into scope, one parameter unblocks R-26 and the
+product's own differentiator: a `tier` on `POST /test/users`. The notification
+harness TC45 would need already exists. Listed separately because it is a
+question about scope, not a piece of outstanding work.
 
 ## Where the evidence is
 

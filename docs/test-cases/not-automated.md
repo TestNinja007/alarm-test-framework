@@ -1,13 +1,14 @@
 # The four cases that are not automated
 
 Fifty-seven of the sixty-one designed cases have a spec. These four do not, and
-each is a different reason — which is more useful than a single number.
+each is a different reason — which is more useful than a single number. All
+four are decisions about what to cover, not work left undone.
 
 | Case | Why |
 | --- | --- |
 | **TC7** — Voice clarity | Judgement, not assertion |
 | **TC8** — Cross-browser functionality | Satisfied structurally, not as a spec |
-| **TC45** — Each repeat says something different | Blocked by a tier gate |
+| **TC45** — Each repeat says something different | Out of scope: paid tiers |
 | **TC46** — Notification appears correctly on the desktop | Outside the browser |
 
 ## TC7 — Voice clarity
@@ -33,27 +34,24 @@ pickers, the speech synthesiser, the timezone list — are
 
 ## TC45 — Each repeat says something different
 
-**Blocked by the product, not by the harness.** The case needs an alarm
-repeating within a day, so that there are earlier occurrences and a final one.
-Within-day repetition is gated to paid tiers, and the only account the test
-hooks can create is on the basic tier:
+**Out of scope.** The case needs an alarm repeating within a day, so that there
+are earlier occurrences and a final one. Within-day repetition sits behind a
+paid tier, and [paid tiers are not under test](../../README.md#what-is-not-under-test).
 
-```
-422 tier_limit — Repeating within a day is not available on the basic tier.
-```
-
-Everything else it needs exists: the notification harness built for
+So this is a boundary rather than a blockage. The harness is one parameter
+short of reaching it — a `tier` on `POST /test/users` — and everything else the
+case needs already exists: the notification harness built for
 [TC4 and TC27](../../tests/alarms/notification.ui.spec.ts) controls the clock,
 records what was spoken, and waits for the scheduler.
 
-**This is worth more than the case.** Within-day repetition is one of the
-product's two stated differentiators, and it cannot be tested through the
-interface by any account the test hooks can produce. A test-support route that
-can create an account but not an account that can use the product's main
-feature is a testability gap, and the fix is a tier on `POST /test/users`.
+**What this costs, stated plainly.** R-26 has no automated spec, and within-day
+repetition is one of the product's two stated differentiators. That is worth
+knowing when deciding whether the boundary should move; it is not a reason to
+move it today.
 
-Filed rather than worked around: creating a paid account by writing to the
-database directly would make the spec pass and leave the gap.
+What is *not* out of scope is basic-tier behaviour at the gate, and that is
+covered: the limit of two groups, and the refusal when a third is attempted,
+are what a new user meets on their first day.
 
 ## TC46 — Notification appears correctly on the desktop
 

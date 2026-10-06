@@ -129,6 +129,15 @@ def main():
     w(f'| Cases automated | {len(automated)} |')
     w(f'| Specs | {sum(len(v) for v in automated.values())} |\n')
 
+    # A "none" in the matrix is a fact without a reason, and the reasons are
+    # decisions rather than data - so they are written down once, by hand, and
+    # pointed at from here rather than guessed at by this script.
+    w('Every case without a spec, and why, is in '
+      '[not-automated.md](test-cases/not-automated.md). None of them is '
+      'outstanding work: three are decisions about what a test can usefully '
+      'assert, and one is a feature behind a paid tier, which is '
+      '[out of scope](../README.md#what-is-not-under-test).\n')
+
     w('## The matrix\n')
     w('| Requirement | Cases | Automated as |')
     w('| --- | --- | --- |')

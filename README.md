@@ -89,6 +89,9 @@ tests/
 docs/
   test-cases/           cases exported from TestQuality
   defects/              every defect found, how it was found, what guards it
+scripts/
+  traceability.py       regenerates the matrix from requirements, cases, specs
+  mark-automated.py     sets test_is_automated in the exports, for re-import
 k6/
   smoke|load|stress|spike|auth.js    the load profiles
   observability/        Prometheus and Grafana, for watching a run
@@ -97,6 +100,23 @@ k6/
 
 Specs are named for the layer they run at: `*.api.spec.ts` runs without a
 browser, `*.ui.spec.ts` runs in Chromium, Firefox and WebKit.
+
+### After adding a spec
+
+Two generated things go stale, and both are one command:
+
+```bash
+python scripts/traceability.py --app ../alarm-configurator
+python scripts/mark-automated.py
+```
+
+The first rewrites [the matrix](docs/traceability.md). The second sets
+`test_is_automated` in the TestQuality exports so they can be imported back,
+and reports anything automated that the exports do not know about.
+
+Neither touches test design. `mark-automated.py` writes exactly one column -
+the cases, steps, expected results and labels are yours, and a field-by-field
+comparison is the check that it stayed that way.
 
 ## The decisions worth knowing
 
@@ -143,6 +163,30 @@ which tells you nothing the one spec testing sign-in did not.
 user reaches. Direct SQL is for the questions the API cannot answer — whether a
 cascade truly removed rows, whether a column really holds UTC. Those specs are
 tagged `@db` and skip when `DATABASE_URL` is unset.
+
+## What is not under test
+
+**Paid tiers are out of scope for now.** Every account this suite uses is on
+the basic tier — the one the test hooks create, and the one a new user gets.
+That is a deliberate boundary, not a limitation of the harness.
+
+What follows from it:
+
+- The tier *limits* are tested, because they are basic-tier behaviour and a new
+  user meets them on their first day: two groups, and the refusal when a third
+  is attempted.
+- The features *behind* the gate are not. Within-day repetition is the one that
+  matters, and [TC45](docs/test-cases/not-automated.md) is the case that would
+  have covered it.
+- R-26 therefore has no automated spec, and that is a scope decision rather
+  than a gap. It should be read that way in
+  [the traceability matrix](docs/traceability.md), which reports the fact
+  without knowing the reason.
+
+If paid tiers come into scope later, the harness needs one thing: a `tier` on
+`POST /test/users`. Everything else TC45 needs — clock control, recorded
+speech, waiting for the scheduler — already exists for
+[TC4 and TC27](tests/alarms/notification.ui.spec.ts).
 
 ## Tags
 

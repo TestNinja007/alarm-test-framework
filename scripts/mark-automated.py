@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+"""
+Set test_is_automated in the TestQuality case exports from what is actually
+automated.
+
+The exports are the user's: the cases, their steps, their expected results and
+their labels are all test design and are never touched here. One column is
+bookkeeping rather than design - whether a spec exists - and that column is
+derivable from the repository, so it is derived instead of remembered.
+
+Run it after adding specs, then import the CSVs into TestQuality:
+
+    python scripts/mark-automated.py
+
+It reuses specs() from traceability.py rather than scanning for test titles
+again. Two copies of that regex is exactly how the matrix came to be missing
+specs that were running perfectly well, and a second copy here would drift the
+same way.
+"""
+
+import csv
+import io
+import os
+import sys
+
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(HERE, 'scripts'))
+
+from traceability import specs  # noqa: E402
+
+CASES = os.path.join(HERE, 'docs', 'test-cases')
+EXPORTS = ['negative-cases.csv', 'coverage-cases.csv']
+
+
+def main():
+    automated = specs(os.path.join(HERE, 'tests'))
+
+    touched = {'rows': 0, 'set': 0, 'cleared': 0}
+    known = set()
+
+    for name in EXPORTS:
+        path = os.path.join(CASES, name)
+        with io.open(path, encoding='utf-8', newline='') as handle:
+            reader = csv.DictReader(handle)
+            fields = reader.fieldnames
+            rows = list(reader)
+
+        for row in rows:
+            key = row.get('test_key', '').strip()
+            if not key.isdigit():
+                continue
+            known.add(int(key))
+            want = '1' if int(key) in automated else '0'
+            if row['test_is_automated'] != want:
+                touched['set' if want == '1' else 'cleared'] += 1
+            row['test_is_automated'] = want
+            touched['rows'] += 1
+
+        # Written back with the same dialect it arrived in, so the diff shows
+        # the one column that changed rather than a reformat of the whole file.
+        with io.open(path, 'w', encoding='utf-8', newline='') as handle:
+            writer = csv.DictWriter(handle, fieldnames=fields, lineterminator='\n')
+            writer.writeheader()
+            writer.writerows(rows)
+
+        flagged = sorted({int(r['test_key']) for r in rows
+                          if r.get('test_key', '').strip().isdigit()
+                          and r['test_is_automated'] == '1'})
+        print('{}: {} rows, {} cases marked automated'.format(name, len(rows), len(flagged)))
+
+    print('')
+    print('{} rows read - {} newly marked automated, {} cleared.'.format(
+        touched['rows'], touched['set'], touched['cleared']))
+
+    # Anything automated but absent from the exports is a case these files do
+    # not know about, which is worth saying rather than silently ignoring.
+    orphans = sorted(set(automated) - known)
+    if orphans:
+        print('Automated but not in these exports (TC1-TC10 live in '
+              'requirement-mapping.md): {}'.format(
+                  ', '.join('TC{}'.format(o) for o in orphans)))
+
+
+if __name__ == '__main__':
+    main()
