@@ -16,3 +16,8 @@ pytest==8.3.4
 # before looking at rows. The UI writes two tables - alarm_drafts and
 # ui_state - that no API-only test can produce the way a browser does.
 playwright==1.49.1
+
+# A report page of its own, so the published results cover both stacks rather
+# than only the Playwright half. Self-contained output: one HTML file with its
+# CSS and JS inlined, which is what makes it safe to drop onto a static site.
+pytest-html==4.1.1

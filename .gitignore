@@ -16,3 +16,11 @@ playwright/.cache/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Report build output. The published site is assembled in CI from the
+# per-job artifacts; none of it belongs in the repository.
+blobs/
+blob-local/
+site/
+database-report/
+playwright-results.json

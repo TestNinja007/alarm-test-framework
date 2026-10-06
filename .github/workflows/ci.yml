@@ -281,7 +281,10 @@ jobs:
 
       - name: Run the database layer
         working-directory: database
-        run: python -m pytest tests -v --junit-xml=../database-results.xml
+        run: >-
+          python -m pytest tests -v
+          --junit-xml=../database-report/results.xml
+          --html=../database-report/index.html --self-contained-html
 
       - name: Put the results on the run page
         if: always()
@@ -314,6 +317,14 @@ jobs:
               with open(summary, 'a', encoding='utf-8') as handle:
                   handle.write('\n'.join(lines) + '\n')
           PY
+
+      - name: Hand the report to the report job
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-report
+          path: database-report/
+          retention-days: 30
 
       - name: Upload the application log
         if: failure()
@@ -365,14 +376,30 @@ jobs:
       # The blobs arrive one directory deep, since each pass writes into its
       # own to keep the next from clearing it. merge-reports wants them flat,
       # and the file names are already unique per pass.
+      # Uploaded by the database job. `continue-on-error` because a missing
+      # database report must not stop the Playwright report being published -
+      # the front page says "unavailable" for whichever stack did not report,
+      # which is the honest outcome rather than no page at all.
+      - name: Collect the database layer's report
+        id: database-report
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: database-report
+          path: database-report
+
       - name: Flatten the blobs
         run: |
           mkdir -p blobs
           find all-blob-reports -name '*.zip' -exec cp {} blobs/ \;
           echo "Merging:"; ls -1 blobs
 
+      # html for people, json for the front page's counts. The json reporter
+      # writes to stdout unless told otherwise, hence the variable.
       - name: Merge them into one HTML report
-        run: npx playwright merge-reports --reporter html ./blobs
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: playwright-results.json
+        run: npx playwright merge-reports --reporter html,json ./blobs
 
       - name: Keep the merged report as an artifact too
         uses: actions/upload-artifact@v4
@@ -383,11 +410,29 @@ jobs:
 
       # Only from main. A pull request from a fork cannot deploy Pages, and a
       # branch's results are not the published ones.
+      # Both reports stay in the format their own tool produced: merging them
+      # would mean going through JUnit XML, the only format both speak, which
+      # discards the Playwright traces and screenshots. The front page is the
+      # way in, so nobody lands on one report and reads it as the whole run.
+      - name: Assemble the site
+        run: |
+          mkdir -p site/playwright site/database
+          cp -r playwright-report/. site/playwright/
+          if [ -f database-report/index.html ]; then
+            cp -r database-report/. site/database/
+          else
+            echo "No database report for this run; the front page will say so."
+          fi
+          python3 scripts/build-report-site.py \
+            --playwright-json playwright-results.json \
+            --database-xml database-report/results.xml \
+            --out site/index.html
+
       - name: Package it for Pages
         if: github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
-          path: playwright-report/
+          path: site/
 
       - name: Publish
         id: deploy
