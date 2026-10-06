@@ -70,7 +70,11 @@ def specs(tests_dir):
             path = os.path.join(root, name)
             relative = os.path.relpath(path, HERE).replace('\\', '/')
             for line in io.open(path, encoding='utf-8'):
-                match = re.search(r"test\(\s*'(TC(\d+)[a-z]?):\s*(.+?)'", line)
+                # Either quote style: a title containing an apostrophe is
+                # written with double quotes, and matching only single ones
+                # made those specs invisible to the matrix while they ran
+                # perfectly well.
+                match = re.search(r"""test\(\s*['\"](TC(\d+)[a-z]?):\s*(.+?)['\"]""", line)
                 if match:
                     automated[int(match.group(2))].append((relative, match.group(1), match.group(3)))
     return automated

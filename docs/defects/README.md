@@ -5,7 +5,7 @@ what now guards it.
 
 The register lives here rather than in the application repository because it is
 a test deliverable — the test plan promises it — and because the interesting
-column is not the fix. It is **how found**. A list of twenty defects says
+column is not the fix. It is **how found**. A list of twenty-one defects says
 little; nineteen defects sorted by the activity that caught them says what the
 testing is actually worth.
 
@@ -55,6 +55,7 @@ container.
 | [DEF-18](#def-18) | Authentication throughput is bounded by scrypt on four threads | Informational | — | By design | Load test |
 | [DEF-19](#def-19) | A database connection the pool cannot obtain becomes an unhandled 500 | Medium | P2 | **Open** | **Automated test** |
 | [DEF-20](#def-20) | Completing registration, and completing a password reset, answered 500 | High | P1 | Fixed | **Automated test** |
+| [DEF-21](#def-21) | The sign-in form had no client-side field validation, contrary to A-02 | Low | P3 | Fixed | **Automated test** |
 
 Three are open, and DEF-17 is no longer one of them. DEF-08 is the more interesting one: it was recorded with a
 confident root cause, three experiments disproved that cause, and the entry now
@@ -72,18 +73,18 @@ accumulates correct diagnoses is a register nobody checked.
 | Exploratory use, deployed | 1 |
 | Production log review | 1 |
 | Deployment failure | 1 |
-| Automated test | 3 |
+| Automated test | 4 |
 | While diagnosing another defect | 1 |
 
-**Three defects were found by the automated suite.** That number is low for a
+**Four defects were found by the automated suite.** That number is low for a
 reason worth stating rather than hiding: the suite was written after the
 product, so it inherited an application whose obvious faults had already been
-exercised by hand. Its value is the next twenty, not these. And the first it
+exercised by hand. Its value is the next twenty-one, not these. And the first it
 did catch, DEF-09, was the first fault in the application that nobody had found
 by using it — a wrong answer returned with a success status, which is precisely
 the kind a person does not notice and an assertion cannot miss.
 
-**Half of these were outside functional testing entirely.** Nine of twenty —
+**Half of these were outside functional testing entirely.** Nine of twenty-one —
 DEF-02, DEF-03, DEF-07, DEF-08, DEF-11, DEF-15, DEF-16, DEF-17 and DEF-18 —
 came from reading configuration, reading logs, a failed deploy, a load run, or
 comparing documentation against behaviour. No amount of clicking the interface
@@ -1015,6 +1016,55 @@ is still unexercised and was found by reading, not by running.
 **Regression coverage.** TC2 drives registration end to end through the
 browser, including the code, and asserts the session afterwards. The
 reset-password half has none.
+
+---
+
+## DEF-21
+
+**The sign-in form had no client-side field validation, contrary to A-02**
+
+| | |
+| --- | --- |
+| Severity | Low |
+| Priority | P3 |
+| Status | Fixed — `9416750` |
+| Component | Sign-in form |
+| Requirement | A-02, R-29 |
+| Environment | All |
+| Found by | **TC13, written against the documented rule rather than the behaviour** |
+
+**Steps to reproduce.** Open the sign-in form. Enter an email, leave the
+password blank, submit.
+
+**Expected.** A-02: "Field-level validation with inline errors, client- and
+server-side." The submission is refused, the error appears on the password,
+and no request is sent.
+
+**Actual.** The form posted the empty password, the server refused it, and the
+result was a general banner that did not say which field was wrong. No field
+error existed on that form at all — not even for the server's own field
+errors, which the registration form had been mapping onto its fields all
+along.
+
+**Why it is only Low.** Nothing is at risk: the server refuses it either way.
+The cost is a pointless round trip and an error that makes the person re-read
+the form to work out which part of it the application is complaining about.
+
+**Why it is worth a number anyway.** It is a documented rule that was not
+true, which is the same class as [DEF-15](#def-15) — and the only reason it
+was found is that the case was written from A-02 rather than from watching the
+form. A test written by using the application first would have asserted the
+banner and passed.
+
+**The fix keeps the asymmetry.** The client checks emptiness only. Whether the
+credentials are *right* stays on the server, which answers an unknown address
+and a wrong password identically so the form cannot be used to discover which
+addresses have accounts.
+
+**Regression coverage.** TC13, which asserts all three clauses — refused, on
+the field, and that no request was made. The third is what makes it a browser
+test: an API spec can only observe the request a correct implementation never
+makes.
 
 ---
 

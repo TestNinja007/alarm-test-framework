@@ -44,6 +44,16 @@ interface TestFixtures {
   freshUser: ThrowawayUser;
   /** An API client signed in as the seeded, read-only account. */
   seededApi: ApiClient;
+  /**
+   * An API client signed in as a pristine account, for this test alone.
+   *
+   * `userApi` is worker-scoped and shared, which is right for reading and
+   * wrong for anything that creates a capped resource: the basic tier allows
+   * two groups, so three specs making one each on the same account leave the
+   * third failing on a tier limit that has nothing to do with what it tests.
+   * Found exactly that way.
+   */
+  freshApi: ApiClient;
   /** A browser page already signed in, without filling in the form. */
   signedInPage: Page;
   /**
@@ -118,6 +128,15 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
 
   freshUser: async ({ hooks }, use) => {
     await use(await hooks.createUser());
+  },
+
+  freshApi: async ({ freshUser }, use) => {
+    const context = await newApiContext();
+    const client = new ApiClient(context);
+    const response = await client.signIn(freshUser.email, freshUser.password);
+    expect(response.ok(), 'the fresh account should be able to sign in').toBeTruthy();
+    await use(client);
+    await context.dispose();
   },
 
   seededApi: async ({}, use) => {

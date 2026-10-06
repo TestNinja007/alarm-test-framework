@@ -44,8 +44,16 @@ export class ApiClient {
     return this.request.patch(apiPath(path), { headers: this.headers(), data: data ?? {} });
   }
 
-  async delete(path: string): Promise<APIResponse> {
-    return this.request.delete(apiPath(path), { headers: this.headers() });
+  /**
+   * `data` is optional because most deletes need none — but deleting an
+   * account is password-confirmed, and a DELETE that cannot carry a body
+   * cannot exercise it.
+   */
+  async delete(path: string, data?: unknown): Promise<APIResponse> {
+    return this.request.delete(apiPath(path), {
+      headers: this.headers(),
+      ...(data === undefined ? {} : { data }),
+    });
   }
 
   /**
@@ -69,6 +77,22 @@ export class ApiClient {
     const response = await this.post('/auth/logout');
     this.csrfToken = undefined;
     return response;
+  }
+
+  /**
+   * A mutating request with the CSRF header under the caller's control.
+   *
+   * Every other method here adds the token, which is the right default and
+   * makes the guard untestable: a client that cannot omit the header cannot
+   * check that omitting it is refused. Pass `{}` for no token at all, or a
+   * wrong one.
+   */
+  async postRaw(
+    path: string,
+    data?: unknown,
+    headers: Record<string, string> = {},
+  ): Promise<APIResponse> {
+    return this.request.post(apiPath(path), { headers, data: data ?? {} });
   }
 
   /** Reads the token back from the session, after a sign-in done elsewhere. */

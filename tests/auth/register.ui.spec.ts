@@ -78,6 +78,27 @@ test.describe('creating an account @ui @auth', () => {
     expect(folders.items).toHaveLength(0);
   });
 
+  test('TC16: a password under ten characters is refused on the password field', async ({
+    page,
+  }) => {
+    await page.goto('/register');
+
+    await page
+      .getByTestId('register-email-input')
+      .fill(`short-${Date.now()}@example.test`);
+    await page.getByTestId('register-name-input').fill('Short Password');
+    await page.getByTestId('register-password-input').fill('nine-char');
+    await page.getByTestId('register-submit-button').click();
+
+    // R-14. The error belongs on the password, and has to state the minimum:
+    // "too short" without a number sends the person to guess how much more.
+    const error = page.getByTestId('register-password-input-error');
+    await expect(error, 'the refusal should land on the password field').toBeVisible();
+    await expect(error, 'and should say what the minimum is').toContainText(/10|ten/i);
+
+    await expect(page).toHaveURL(/\/register$/);
+  });
+
   test('TC15: an address that already has an account is refused on the field', async ({
     page,
     freshUser,

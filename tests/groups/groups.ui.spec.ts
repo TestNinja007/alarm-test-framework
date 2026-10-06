@@ -4,8 +4,8 @@ import { Alarms } from '../../src/pages/alarms.js';
 import { Dashboard } from '../../src/pages/dashboard.js';
 
 /**
- * TC6 and TC10 — alarm groups, through the interface.
- * Requirements R-20, R-23, R-33, and R-10.
+ * TC6, TC10, TC28, TC29 and TC44 — alarm groups, through the interface.
+ * Requirements R-10, R-20, R-22, R-23, R-33.
  *
  * Grouping is one of the product's two stated pillars, and before these specs
  * nothing anywhere exercised it: no API spec touched `/folders` at all. R-10
@@ -60,7 +60,7 @@ test.describe('alarm groups @ui', () => {
     await expect(alarms.emptyState).toBeVisible();
   });
 
-  test('TC6b: a group name already in use is refused in the dialog', async ({ freshUserPage }) => {
+  test('TC28: a group name already in use is refused in the dialog', async ({ freshUserPage }) => {
     const dashboard = new Dashboard(freshUserPage);
 
     await dashboard.goto();
@@ -146,5 +146,93 @@ test.describe('alarm groups @ui', () => {
     // becoming unfiled.
     const remaining = await api.json<{ items: unknown[] }>(await api.get('/alarms'));
     expect(remaining.items, "the group's alarms should have gone too").toHaveLength(0);
+  });
+});
+
+test.describe('groups, the rest @ui', () => {
+  test('TC29: renaming a group onto an existing name is refused and changes nothing', async ({
+    freshUserPage,
+  }) => {
+    const dashboard = new Dashboard(freshUserPage);
+    await dashboard.goto();
+    await dashboard.createGroup('Morning');
+    await dashboard.createGroup('Evening');
+
+    await dashboard.rename('Evening', 'Morning');
+
+    // R-23. The refusal has to leave the original alone: a rename that fails
+    // halfway is worse than one that fails, because the group it renamed is
+    // now the one it collided with.
+    await expect(dashboard.renameDialog, 'the dialog stays open to be corrected').toBeVisible();
+    await freshUserPage.keyboard.press('Escape');
+
+    await expect(dashboard.groupRow('Evening'), 'the original name is unchanged').toBeVisible();
+    await expect(dashboard.groupRows, 'and there is still one of each').toHaveCount(2);
+
+    const api = new ApiClient(freshUserPage.request);
+    await api.adoptSession();
+    const folders = await api.json<{ items: Array<{ name: string }> }>(await api.get('/folders'));
+    expect(folders.items.map((f) => f.name).sort()).toEqual(['Evening', 'Morning']);
+  });
+
+  test('TC44: an alarm with no group is listed at the top level, and moves in and out', async ({
+    freshUserPage,
+  }) => {
+    const api = new ApiClient(freshUserPage.request);
+    await api.adoptSession();
+
+    const folder = await api.json<Folder>(await api.post('/folders', { name: 'Somewhere' }));
+    const alarm = await api.json<{ id: string }>(
+      await api.post('/alarms', {
+        name: 'Unfiled one',
+        timeOfDay: '10:15',
+        timezone: 'UTC',
+        startDate: '2027-05-01',
+        rule: { type: 'daily' },
+      }),
+    );
+
+    const dashboard = new Dashboard(freshUserPage);
+    await dashboard.goto();
+
+    /*
+     * R-20's wording is specific and worth honouring: at the top level,
+     * "not inside one called Unfiled". A pseudo-group would be the obvious
+     * implementation and would read as a group the person did not make and
+     * cannot delete.
+     */
+    await expect(dashboard.looseAlarmRows.filter({ hasText: 'Unfiled one' })).toBeVisible();
+    await expect(
+      dashboard.groupRows.filter({ hasText: 'Unfiled' }),
+      'there should be no group standing in for having no group',
+    ).toHaveCount(0);
+
+    // Into a group...
+    await api.json(
+      await api.put(`/alarms/${alarm.id}`, {
+        name: 'Unfiled one',
+        timeOfDay: '10:15',
+        timezone: 'UTC',
+        startDate: '2027-05-01',
+        rule: { type: 'daily' },
+        folderId: folder.id,
+      }),
+    );
+    await dashboard.goto();
+    await expect(dashboard.looseAlarmRows.filter({ hasText: 'Unfiled one' })).toHaveCount(0);
+
+    // ...and back out again.
+    await api.json(
+      await api.put(`/alarms/${alarm.id}`, {
+        name: 'Unfiled one',
+        timeOfDay: '10:15',
+        timezone: 'UTC',
+        startDate: '2027-05-01',
+        rule: { type: 'daily' },
+        folderId: null,
+      }),
+    );
+    await dashboard.goto();
+    await expect(dashboard.looseAlarmRows.filter({ hasText: 'Unfiled one' })).toBeVisible();
   });
 });
