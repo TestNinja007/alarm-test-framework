@@ -5,8 +5,8 @@ what now guards it.
 
 The register lives here rather than in the application repository because it is
 a test deliverable — the test plan promises it — and because the interesting
-column is not the fix. It is **how found**. A list of eighteen defects says
-little; eighteen defects sorted by the activity that caught them says what the
+column is not the fix. It is **how found**. A list of nineteen defects says
+little; nineteen defects sorted by the activity that caught them says what the
 testing is actually worth.
 
 Defects are filed against the product. Where a fix exists the commit is named,
@@ -53,6 +53,7 @@ container.
 | [DEF-16](#def-16) | A failing mail check reported no reason | Low | P3 | Fixed | While diagnosing DEF-02 |
 | [DEF-17](#def-17) | Sixteen requirements are cited by the test cases and written down nowhere | Low | P2 | **Open** | Documentation review |
 | [DEF-18](#def-18) | Authentication throughput is bounded by scrypt on four threads | Informational | — | By design | Load test |
+| [DEF-19](#def-19) | A database connection the pool cannot obtain becomes an unhandled 500 | Medium | P2 | **Open** | **Automated test** |
 
 Two are open. DEF-17 is the gap the next deliverable has to close before it
 can be built. DEF-08 is the more interesting one: it was recorded with a
@@ -71,18 +72,18 @@ accumulates correct diagnoses is a register nobody checked.
 | Exploratory use, deployed | 1 |
 | Production log review | 1 |
 | Deployment failure | 1 |
-| Automated test | 1 |
+| Automated test | 2 |
 | While diagnosing another defect | 1 |
 
-**One defect was found by the automated suite.** That number is low for a
+**Two defects were found by the automated suite.** That number is low for a
 reason worth stating rather than hiding: the suite was written after the
 product, so it inherited an application whose obvious faults had already been
-exercised by hand. Its value is the next eighteen, not these. And the one it
+exercised by hand. Its value is the next nineteen, not these. And the first it
 did catch, DEF-09, was the first fault in the application that nobody had found
 by using it — a wrong answer returned with a success status, which is precisely
 the kind a person does not notice and an assertion cannot miss.
 
-**Half of these were outside functional testing entirely.** Nine of eighteen —
+**Half of these were outside functional testing entirely.** Nine of nineteen —
 DEF-02, DEF-03, DEF-07, DEF-08, DEF-11, DEF-15, DEF-16, DEF-17 and DEF-18 —
 came from reading configuration, reading logs, a failed deploy, a load run, or
 comparing documentation against behaviour. No amount of clicking the interface
@@ -512,6 +513,15 @@ as a hardening change rather than as the resolution of this defect.
 so the failures have never been inspected. That is the next step, and it is a
 gap in the scripts rather than in the application.
 
+**Later evidence, from a different direction.** A process left up for about
+three hours began failing pool acquisitions outright, with
+`Connection terminated unexpectedly` as the cause — an existing pooled
+connection dropping, not a request queueing behind others. Restarting the
+process cleared it. Whatever is interfering with connections here does so
+over time and is not a function of load alone, which narrows this further
+away from the pool-sizing explanation that was first recorded.
+See [DEF-19](#def-19).
+
 **Why a p95 would have hidden all of this.** Every p95 threshold in the profile
 passed, on both runs. The measurement that found it was the maximum.
 
@@ -887,6 +897,59 @@ per test, through the worker-scoped `workerUser` and `authState` fixtures in
 `UV_THREADPOOL_SIZE` or with more processes, not by weakening the hash. Anyone
 tempted to lower `N` to make this graph look better should read this entry
 first.
+
+---
+
+## DEF-19
+
+**A database connection the pool cannot obtain becomes an unhandled 500**
+
+| | |
+| --- | --- |
+| Severity | Medium |
+| Priority | P2 |
+| Status | **Open** |
+| Component | `src/api/src/db/pool.ts`, error handling |
+| Requirement | — (non-functional) |
+| Environment | Local, a process that had been up about three hours |
+| Found by | **The suite**, failing five specs that had passed all day |
+
+**Steps to reproduce.** Leave the application running for a few hours under
+intermittent load. Run the suite.
+
+**Expected.** If the pool cannot produce a connection, the caller is told so in
+terms it can act on — 503, and a signal that retrying is reasonable.
+
+**Actual.** Five specs failed on `Creating a throwaway user failed: 500`. The
+application logged `Unhandled error` with
+`Connection terminated due to connection timeout: Connection terminated
+unexpectedly`, and a response time of **5,051 ms** — the acquisition timeout
+exactly. Restarting the process made the suite green again: 48 passing.
+
+**Two separate faults, and only the second is this entry.**
+
+*Connections are dying and the pool is not recovering.* The cause under the
+timeout is `Connection terminated unexpectedly` — an existing pooled
+connection dropped, not a queue. Over hours the pool shrinks until acquisition
+cannot succeed. That belongs with [DEF-08](#def-08), whose connection-layer
+symptoms this matches, and it is still unexplained.
+
+*A pool failure is reported as an unhandled 500.* This part is plainly wrong
+regardless of what kills the connections. A caller cannot distinguish "the
+server is briefly out of connections, try again" from "your request was
+wrong", and the two want opposite responses. 503 with `Retry-After`, and the
+error caught where it is raised rather than reaching the generic handler.
+
+**Note on provenance.** The acquisition timeout that produced this 500 was
+added as a hardening change against DEF-08 — it converted a hang into an
+error, exactly as specified. Doing so made a pre-existing problem visible and
+made the suite fail. That is the change working, not misfiring: a hang is not
+better than an error, it is only quieter. But the fix was half of one, and
+this entry is the other half.
+
+**Regression coverage.** Incidental and strong: any spec that creates a
+throwaway account fails when this returns, which is most of the suite. Nothing
+asserts the *status code*, which is the part being complained about here.
 
 ---
 
