@@ -1,0 +1,10 @@
+folder_key,folder_name,test_key,test_name,test_description,test_type,test_priority,test_precondition,test_assigned_to,test_is_automated,test_estimate,test_attachments,test_requirements,test_labels,step_description,step_expected_result,step_sequence,data_set
+5,Functional/Core,1,Login to website,,Functionality,,,,1,0,,R-29,Core,,,1,
+5,Functional/Core,2,Create User,,Functionality,,,,1,0,,R-30,Core,,,1,
+5,Functional/Core,3,Create Alarm,,Functionality,,,,1,0,,"R-31, R-24",Core,,,1,
+5,Functional/Core,5,Alarm Disable Button,,Functionality,,,,1,0,,R-28,Core,,,1,
+5,Functional/Core,6,Alarm Groups,,Functionality,,,,1,0,,"R-20, R-23, R-33",Core,,,1,
+5,Functional/Core,7,Voice Clarity,,Functionality,,,,0,0,,R-25,"Core,Manual",,,1,
+5,Functional/Core,8,Cross Browser Functionality,,Compatibility,,,,0,0,,R-32,"Core,Manual",,,1,
+5,Functional/Core,9,CRUD on Alarm,,Functionality,,,,1,0,,"R-31, R-34",Core,,,1,
+5,Functional/Core,10,CRUD on Alarm Group,,Functionality,,,,1,0,,R-33,Core,,,1,

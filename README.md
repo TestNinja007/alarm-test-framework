@@ -92,6 +92,7 @@ docs/
 scripts/
   traceability.py       regenerates the matrix from requirements, cases, specs
   mark-automated.py     sets test_is_automated in the exports, for re-import
+  export-core-cases.py  writes TC1-TC10 in the TestQuality import schema
 k6/
   smoke|load|stress|spike|auth.js    the load profiles
   observability/        Prometheus and Grafana, for watching a run
@@ -117,6 +118,27 @@ and reports anything automated that the exports do not know about.
 Neither touches test design. `mark-automated.py` writes exactly one column -
 the cases, steps, expected results and labels are yours, and a field-by-field
 comparison is the check that it stayed that way.
+
+### The original ten
+
+TC1-TC10 were never exported to TestQuality, so seven of them are automated
+with nothing saying so. `python scripts/export-core-cases.py` writes
+[core-cases.csv](docs/test-cases/core-cases.csv) in the same eighteen-column
+schema, filling only what this repository knows: the name and requirement from
+[requirement-mapping.md](docs/test-cases/requirement-mapping.md), and the
+automation flag from the specs.
+
+**The step fields are deliberately empty.** Steps and expected results are test
+design, and generating them from the specs would be reading the answer off the
+test that was written to the case. Fill them in TestQuality, which is where
+cases live.
+
+TC4 is skipped: it is already in `coverage-cases.csv` under a fuller name, and
+re-exporting it would either duplicate the case or overwrite the better
+description. One structural choice was made - a new folder, key 5,
+"Functional/Core", because every existing folder is a specialisation and the
+original ten are the plain capabilities none of them describe. Change it before
+importing if your tree is arranged differently.
 
 ## The decisions worth knowing
 

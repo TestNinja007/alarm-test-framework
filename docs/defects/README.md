@@ -550,6 +550,46 @@ over time and is not a function of load alone, which narrows this further
 away from the pool-sizing explanation that was first recorded.
 See [DEF-19](#def-19).
 
+### Reproduced 6 October 2026, and it is faster than recorded
+
+Observed live rather than hunted for, while running the suite against a
+long-lived local process.
+
+| | |
+| --- | --- |
+| Process ready | 02:51:43 |
+| Requests served before failing | 3,057 |
+| First failure | 03:12:41 — **21 minutes in** |
+| Failures | 3, all within the same millisecond |
+| Cost | 4 API specs failed in that run |
+| After restarting | 82 of 82, twice |
+
+Two things here are new.
+
+**Twenty-one minutes, not three hours.** The note below recorded "about three
+hours"; this process lasted 21 minutes and 3,057 requests under repeated suite
+runs. Whatever this is, it tracks cumulative connection churn far better than
+wall-clock time, and that makes it much cheaper to reproduce than previously
+thought.
+
+**It arrives as a burst, not a decline.** Three acquisition failures in the
+same millisecond, then nothing. Not a pool gradually shrinking until it cannot
+serve — a momentary collapse. Whether it would have recovered on its own is
+**unknown**: the process was restarted shortly after, so that was not
+observed and is not claimed.
+
+**This was legible at all only because of [DEF-19](#def-19).** Before that fix
+it would have been an unhandled 500 among others. It arrived as a 503 with a
+warning naming `pool_acquisition_timeout`, which is how it was spotted in a
+log of 3,057 requests.
+
+And it immediately exposed a flaw in that fix: the log said
+`pool_acquisition_timeout` but not *which* node-postgres error it was, because
+the translation replaced the original. That distinction is the whole question
+here — a drained queue and a dead connection point at different causes — so
+the underlying message is now carried as `cause` and logged as its own field
+(`99a3f55`). The next occurrence will say which.
+
 **Why a p95 would have hidden all of this.** Every p95 threshold in the profile
 passed, on both runs. The measurement that found it was the maximum.
 
