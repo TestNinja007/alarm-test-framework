@@ -5,7 +5,7 @@ what now guards it.
 
 The register lives here rather than in the application repository because it is
 a test deliverable — the test plan promises it — and because the interesting
-column is not the fix. It is **how found**. A list of twenty-one defects says
+column is not the fix. It is **how found**. A list of twenty-two defects says
 little; nineteen defects sorted by the activity that caught them says what the
 testing is actually worth.
 
@@ -56,6 +56,7 @@ container.
 | [DEF-19](#def-19) | A database connection the pool cannot obtain becomes an unhandled 500 | Medium | P2 | **Open** | **Automated test** |
 | [DEF-20](#def-20) | Completing registration, and completing a password reset, answered 500 | High | P1 | Fixed | **Automated test** |
 | [DEF-21](#def-21) | The sign-in form had no client-side field validation, contrary to A-02 | Low | P3 | Fixed | **Automated test** |
+| [DEF-22](#def-22) | The create wizard scrolled sideways at phone width | Medium | P2 | Fixed | **Automated test** |
 
 Three are open, and DEF-17 is no longer one of them. DEF-08 is the more interesting one: it was recorded with a
 confident root cause, three experiments disproved that cause, and the entry now
@@ -73,18 +74,18 @@ accumulates correct diagnoses is a register nobody checked.
 | Exploratory use, deployed | 1 |
 | Production log review | 1 |
 | Deployment failure | 1 |
-| Automated test | 4 |
+| Automated test | 5 |
 | While diagnosing another defect | 1 |
 
-**Four defects were found by the automated suite.** That number is low for a
+**Five defects were found by the automated suite.** That number is low for a
 reason worth stating rather than hiding: the suite was written after the
 product, so it inherited an application whose obvious faults had already been
-exercised by hand. Its value is the next twenty-one, not these. And the first it
+exercised by hand. Its value is the next twenty-two, not these. And the first it
 did catch, DEF-09, was the first fault in the application that nobody had found
 by using it — a wrong answer returned with a success status, which is precisely
 the kind a person does not notice and an assertion cannot miss.
 
-**Half of these were outside functional testing entirely.** Nine of twenty-one —
+**Half of these were outside functional testing entirely.** Nine of twenty-two —
 DEF-02, DEF-03, DEF-07, DEF-08, DEF-11, DEF-15, DEF-16, DEF-17 and DEF-18 —
 came from reading configuration, reading logs, a failed deploy, a load run, or
 comparing documentation against behaviour. No amount of clicking the interface
@@ -1065,6 +1066,53 @@ addresses have accounts.
 the field, and that no request was made. The third is what makes it a browser
 test: an API spec can only observe the request a correct implementation never
 makes.
+
+---
+
+## DEF-22
+
+**The create wizard scrolled sideways at phone width**
+
+| | |
+| --- | --- |
+| Severity | Medium |
+| Priority | P2 |
+| Status | Fixed — `58f079b` |
+| Component | Form layout |
+| Requirement | R-31, A-02 |
+| Environment | Any viewport under about 560px |
+| Found by | **TC50, at 390px** |
+
+**Steps to reproduce.** Open the create wizard at 390px wide. Scroll sideways.
+
+**Actual.** The page is 592px wide in a 390px viewport. The spoken-message
+input renders 546px and pushes everything past the edge, so the form scrolls
+horizontally and part of it sits off-screen.
+
+**Root cause, in two parts, and the first hid the second.** Inputs took an
+intrinsic width rather than filling their field — which at desktop width fits
+inside the card and looks deliberate. And `.field` carried `flex: 0 0 auto`,
+so it could not shrink below its content at all. Setting `width: 100%` on the
+inputs alone changed nothing, because 100% of a 546px field is still 546px.
+
+That second part is the interesting one. The rule's own comment explains it
+was written to stop fields *growing* to fill the card. Setting shrink to `0`
+as well stopped them getting smaller than their content, which is a different
+wish that nobody expressed.
+
+**How it was diagnosed.** By measuring the ancestor chain of the overflowing
+element, not by reading the stylesheet: the field was 546px inside a 324px
+fieldset. A child wider than its parent is a shrink problem, and that reading
+is what made the second cause visible after the obvious fix did nothing.
+
+**Why no one had noticed.** Every other form field is outside a fieldset and
+narrow enough to fit, and the application is developed on a desktop. A
+phone-width check is a thing you do or do not do; it is not a thing you
+stumble into.
+
+**Regression coverage.** TC50 asserts no horizontal overflow on the dashboard
+and the wizard at 390px, and that the controls stay reachable — reachable, not
+visible without scrolling, because a form taller than a phone is ordinary.
 
 ---
 
