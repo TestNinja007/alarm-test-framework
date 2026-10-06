@@ -7,11 +7,17 @@ and asks whether what was stored is what was promised. The two questions need
 different tools, which is why there are two stacks rather than one with a
 `@db` tag.
 
-Every test here has the same shape: do something through the API (or let the
-Playwright suite have done something through the UI), then query PostgreSQL
-directly. The HTTP client below exists only to get the database into an
-interesting state. It is not a second API test framework, and assertions about
-status codes and response bodies belong in the other stack.
+Most tests here act over HTTP and then query PostgreSQL. A few act through a
+real browser first, because `alarm_drafts` and `ui_state` are written by the
+interface as somebody moves through it - not by a deliberate save - and no API
+call reproduces that. An earlier version of this docstring claimed the
+Playwright suite might have acted through the UI beforehand, which was
+hand-waving: nothing coordinated the two, and the sentence described a hope.
+
+Either way the clients here exist only to get the database into an interesting
+state. This is not a second API or UI test framework, and assertions about
+status codes, response bodies and what is on screen belong in the other
+stack.
 """
 
 from __future__ import annotations
@@ -262,3 +268,52 @@ def soon(days: int = 30) -> str:
     import datetime
 
     return (datetime.date.today() + datetime.timedelta(days=days)).isoformat()
+
+@pytest.fixture(scope="session")
+def playwright_browser():
+    """
+    A browser for the few tests that must act through the interface.
+
+    Most tests here act over HTTP, because the question is about rows and the
+    shortest honest route to an interesting row is an API call. But two tables
+    - alarm_drafts and ui_state - are written by the browser as someone moves
+    through the application, not by a deliberate save, and no API call
+    reproduces that. For those, only a browser will do.
+
+    Session-scoped: launching Chromium costs more than every test in this
+    directory put together.
+    """
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as driver:
+        browser = driver.chromium.launch()
+        yield browser
+        browser.close()
+
+
+@pytest.fixture
+def page(playwright_browser, api):
+    """
+    A browser page already signed in as this test's throwaway account.
+
+    The session is established over HTTP and the cookies handed to the browser,
+    rather than filling in the sign-in form. Signing in through the form is
+    the Playwright suite's job and it has a spec for it; doing it again here
+    would mean every one of these tests also fails whenever that form breaks,
+    which would tell us nothing new about the database.
+    """
+    context = playwright_browser.new_context(base_url=BASE_URL)
+    context.add_cookies(
+        [
+            {
+                "name": cookie.name,
+                "value": cookie.value,
+                "domain": cookie.domain.lstrip("."),
+                "path": cookie.path or "/",
+            }
+            for cookie in api.session.cookies
+        ]
+    )
+    browser_page = context.new_page()
+    yield browser_page
+    context.close()

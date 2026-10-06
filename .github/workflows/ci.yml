@@ -265,6 +265,13 @@ jobs:
       - name: Install the database layer
         run: python -m pip install -r database/requirements.txt
 
+      # Four of these tests act through the interface before looking at rows,
+      # because alarm_drafts and ui_state are written by the browser and no
+      # API call reproduces that. Chromium only - this job is not the
+      # cross-engine matrix, it is the database.
+      - name: Install Chromium for the interface-driven tests
+        run: python -m playwright install --with-deps chromium
+
       # These tests skip themselves without DATABASE_URL, which is right
       # locally and wrong here: in CI a missing database is a broken workflow,
       # not a configuration choice, and skipping would make it look green.

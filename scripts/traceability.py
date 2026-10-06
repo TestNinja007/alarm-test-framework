@@ -125,10 +125,12 @@ def main():
     # invent, and hiding them would understate the layer.
     if extras:
         w(f'The database layer also holds **{len(extras)} tests that answer no '
-          'designed case** — referential integrity as the schema declares it, how '
-          'values are stored, and whether the stored rule matches the returned '
-          'one. Real coverage with no case number, so counted separately rather '
-          'than folded in.' + chr(10))
+          'designed case** — referential integrity as the schema declares it, '
+          'whether a list holds exactly the rows SQL says it should, how values '
+          'are stored, whether the stored rule matches the returned one, and the '
+          'rows the interface writes as somebody moves through it. Real coverage '
+          'with no case number, so counted separately rather than invented into '
+          'one.' + chr(10))
 
     # A "none" in the matrix is a fact without a reason, and the reasons are
     # decisions rather than data - so they are written down once, by hand, and

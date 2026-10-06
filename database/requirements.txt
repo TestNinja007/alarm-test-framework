@@ -11,3 +11,8 @@ psycopg[binary]==3.2.3
 requests==2.32.3
 
 pytest==8.3.4
+
+# A browser, for the handful of tests that must act through the interface
+# before looking at rows. The UI writes two tables - alarm_drafts and
+# ui_state - that no API-only test can produce the way a browser does.
+playwright==1.49.1

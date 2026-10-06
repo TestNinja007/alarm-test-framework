@@ -75,22 +75,53 @@ class TestDeclarations:
         assert keys["user_id"]["on_delete"] == "c"
         assert keys["user_id"]["references_table"] == "users"
 
-    def test_nothing_in_the_schema_disowns_a_row_instead_of_removing_it(self, db):
+    def test_every_set_null_in_the_schema_is_one_that_was_meant(self, db):
         """
-        No foreign key on these tables uses SET NULL.
+        A cascade and a set-null look alike in a migration and are opposites in
+        effect: one removes the row, the other keeps it pointing at nothing.
+        So every SET NULL has to be deliberate, and this is the list of the
+        ones that are.
 
-        A cascade and a set-null look similar in a migration and are opposites
-        in effect: one removes the row, the other keeps it pointing at nothing.
-        This is the assertion that would catch the second being introduced by
-        accident.
+        `ui_state.folder_id` is the only one, and it is right: the remembered
+        folder selection should fall back to "none" when that folder is
+        deleted, not take the person's whole saved view with it.
+
+        An earlier version of this test looked only at `alarms` and `folders`
+        and therefore passed while knowing nothing - which is worse than
+        failing, because it reads as coverage.
         """
-        offenders = []
-        for table in ("alarms", "folders"):
+        allowed = {("ui_state", "folder_id")}
+
+        found = set()
+        for table in ("alarms", "folders", "ui_state", "alarm_drafts"):
             for key in db.foreign_keys(table):
                 if key["on_delete"] == "n":
-                    offenders.append(table + "." + key["column_name"])
+                    found.add((table, key["column_name"]))
 
-        assert offenders == [], "these would be orphaned rather than deleted: " + str(offenders)
+        unexpected = found - allowed
+        assert unexpected == set(), (
+            "these would be orphaned rather than deleted, and nobody said so: "
+            + str(sorted(unexpected))
+        )
+
+        missing = allowed - found
+        assert missing == set(), (
+            "expected a deliberate SET NULL that is no longer there: " + str(sorted(missing))
+        )
+
+    def test_the_tables_the_interface_writes_cannot_outlive_their_owner(self, db):
+        """
+        alarm_drafts and ui_state are per-account scratch space, written by the
+        browser rather than by a deliberate save. Nothing in the interface ever
+        lists them, so a row left behind by a deleted account would never be
+        seen again and never be cleaned up.
+        """
+        for table in ("alarm_drafts", "ui_state"):
+            keys = {k["column_name"]: k for k in db.foreign_keys(table)}
+            assert "user_id" in keys, table + " should reference its owner"
+            assert keys["user_id"]["on_delete"] == "c", (
+                table + ".user_id should cascade, not " + keys["user_id"]["on_delete"]
+            )
 
 
 class TestCascadesInPractice:

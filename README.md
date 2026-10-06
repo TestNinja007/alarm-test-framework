@@ -87,8 +87,8 @@ tests/                  Playwright: the interface, and the API behind it
   groups/               groups, and what deleting one takes with it
   smoke/                checks on the framework itself
 database/               pytest: the database layer
-  conftest.py           a connection, and enough HTTP to make rows exist
-  tests/                cascades, storage, recurrence as stored
+  conftest.py           a connection, and enough HTTP and browser to make rows
+  tests/                cascades, result sets, storage, recurrence, UI actions
 docs/
   test-cases/           cases exported from TestQuality
   defects/              every defect found, how it was found, what guards it
@@ -243,9 +243,18 @@ instance and one database by construction rather than by agreement. Without
 refuses to let it skip, because there a missing database is a broken workflow
 rather than a decision.
 
-Every test has the same shape: act through the API, then query PostgreSQL. The
-HTTP client in `conftest.py` exists only to make rows exist; assertions about
-status codes and response bodies belong in the Playwright suite.
+Most tests act through the API and then query PostgreSQL. Four act through a
+real browser first, because `alarm_drafts` and `ui_state` are written by the
+interface as somebody moves through it and no API call reproduces that - a
+half-filled wizard is a state no caller would construct on purpose, and it is
+exactly what the draft table exists to survive.
+
+The clients in `conftest.py` exist only to make rows exist. Assertions about
+status codes, response bodies and what is on screen belong in the Playwright
+suite. Sign-in is done over HTTP and the cookies handed to the browser: filling
+in that form is the other stack's job, and repeating it here would make these
+tests fail whenever the form breaks, which would say nothing about the
+database.
 
 | Marker | What it covers |
 | --- | --- |
@@ -253,6 +262,12 @@ status codes and response bodies belong in the Playwright suite.
 | `storage` | how a value is stored, as opposed to what the API returns |
 | `recurrence` | recurrence data as the engine persisted it |
 | `smoke` | the layer's own plumbing, including that `BASE_URL` and `DATABASE_URL` are the same system |
+
+Result sets get their own attention: that a list holds exactly the rows SQL
+says it should, that `total` counts the set rather than the page, and that
+paging one row at a time returns every row once — including when several share
+a sort key, which is what the `id` tiebreaker in `ORDER BY` exists for and
+what breaks silently if it is ever tidied away.
 
 ## Continuous integration
 
