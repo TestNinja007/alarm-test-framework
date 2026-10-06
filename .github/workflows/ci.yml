@@ -119,15 +119,17 @@ jobs:
       # --pass-with-no-tests on both: a project may legitimately have none
       # of one kind. Only the API specs pin the clock today, so without it
       # the serial pass failed every browser job for finding nothing to run.
-      # The browser projects are capped at two workers. Above that, operations
-      # stall for exactly 10s at a time while the application stays healthy --
-      # measured, and written up in playwright.config.ts. Two is reliable and
-      # faster; the API project takes the configured four without trouble.
+      # The browser projects run one worker. Above that, operations stall for
+      # exactly 10s at a time while the application stays healthy -- measured,
+      # and written up in playwright.config.ts. The cap was two until the UI
+      # suite reached eighteen specs, at which point two stopped holding: the
+      # limit tracks total concurrent browser work, not the worker count. One
+      # worker runs the whole browser suite in about 24 seconds.
       - name: Run the parallel pass
         run: >-
           npx playwright test --project=${{ matrix.project }}
           --grep-invert @serial --pass-with-no-tests
-          ${{ matrix.project != 'api' && '--workers=2' || '' }}
+          ${{ matrix.project != 'api' && '--workers=1' || '' }}
         env:
           REPORT_NAME: ${{ matrix.project }}-parallel
 

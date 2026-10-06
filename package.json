@@ -7,8 +7,8 @@
   "scripts": {
     "test": "npm run test:parallel && npm run test:serial",
     "test:api": "playwright test --project=api --grep-invert @serial",
-    "test:ui": "playwright test --project=chromium --workers=2 --grep-invert @serial",
-    "test:browsers": "playwright test --project=chromium --workers=2 --grep-invert @serial && playwright test --project=firefox --workers=2 --grep-invert @serial && playwright test --project=webkit --workers=2 --grep-invert @serial",
+    "test:ui": "playwright test --project=chromium --workers=1 --grep-invert @serial",
+    "test:browsers": "playwright test --project=chromium --workers=1 --grep-invert @serial && playwright test --project=firefox --workers=1 --grep-invert @serial && playwright test --project=webkit --workers=1 --grep-invert @serial",
     "test:serial": "playwright test --project=api --project=chromium --grep @serial --workers=1 --pass-with-no-tests",
     "test:parallel": "npm run test:api && npm run test:ui",
     "test:smoke": "playwright test --grep @smoke",

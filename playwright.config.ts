@@ -34,15 +34,20 @@ export default defineConfig({
    * make the target slow enough that tests time out and look flaky.
    *
    * Four is right for the API project, which runs 33 specs at it without a
-   * single stall. The browser projects are capped lower, at two, by the
-   * `test:ui` and `test:browsers` scripts and by CI — measured, not guessed:
+   * single stall. The browser projects are capped at ONE, by the `test:ui`
+   * and `test:browsers` scripts and by CI — measured, not guessed, and
+   * re-measured when the cap stopped holding:
    *
-   * | Concurrent browser contexts | 8 UI specs |
-   * | --- | --- |
-   * | 1 | pass, every run |
-   * | 2 | pass, 24 of 24 executions, 21.6s |
-   * | 3 | intermittent |
-   * | 4 | intermittent, and 6x slower per test |
+   * | Browser workers | 8 UI specs | 18 UI specs |
+   * | --- | --- | --- |
+   * | 1 | pass | pass, every run, 24s |
+   * | 2 | pass, 24 of 24 executions | **intermittent** |
+   * | 3–4 | intermittent | — |
+   *
+   * The cap was two when the suite held eight UI specs and had to come down
+   * to one at eighteen. That is the useful part: the limit tracks total
+   * concurrent browser work rather than the worker count, so it will need
+   * re-measuring again as the suite grows rather than treating as settled.
    *
    * Above two, operations stall for exactly 10,000 ms at a time — on API
    * requests the server logs as answering in milliseconds, and on clicks that

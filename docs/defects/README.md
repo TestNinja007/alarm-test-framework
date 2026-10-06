@@ -5,7 +5,7 @@ what now guards it.
 
 The register lives here rather than in the application repository because it is
 a test deliverable — the test plan promises it — and because the interesting
-column is not the fix. It is **how found**. A list of nineteen defects says
+column is not the fix. It is **how found**. A list of twenty defects says
 little; nineteen defects sorted by the activity that caught them says what the
 testing is actually worth.
 
@@ -54,6 +54,7 @@ container.
 | [DEF-17](#def-17) | Sixteen requirements are cited by the test cases and written down nowhere | Low | P2 | **Open** | Documentation review |
 | [DEF-18](#def-18) | Authentication throughput is bounded by scrypt on four threads | Informational | — | By design | Load test |
 | [DEF-19](#def-19) | A database connection the pool cannot obtain becomes an unhandled 500 | Medium | P2 | **Open** | **Automated test** |
+| [DEF-20](#def-20) | Completing registration, and completing a password reset, answered 500 | High | P1 | Fixed | **Automated test** |
 
 Two are open. DEF-17 is the gap the next deliverable has to close before it
 can be built. DEF-08 is the more interesting one: it was recorded with a
@@ -72,18 +73,18 @@ accumulates correct diagnoses is a register nobody checked.
 | Exploratory use, deployed | 1 |
 | Production log review | 1 |
 | Deployment failure | 1 |
-| Automated test | 2 |
+| Automated test | 3 |
 | While diagnosing another defect | 1 |
 
-**Two defects were found by the automated suite.** That number is low for a
+**Three defects were found by the automated suite.** That number is low for a
 reason worth stating rather than hiding: the suite was written after the
 product, so it inherited an application whose obvious faults had already been
-exercised by hand. Its value is the next nineteen, not these. And the first it
+exercised by hand. Its value is the next twenty, not these. And the first it
 did catch, DEF-09, was the first fault in the application that nobody had found
 by using it — a wrong answer returned with a success status, which is precisely
 the kind a person does not notice and an assertion cannot miss.
 
-**Half of these were outside functional testing entirely.** Nine of nineteen —
+**Half of these were outside functional testing entirely.** Nine of twenty —
 DEF-02, DEF-03, DEF-07, DEF-08, DEF-11, DEF-15, DEF-16, DEF-17 and DEF-18 —
 came from reading configuration, reading logs, a failed deploy, a load run, or
 comparing documentation against behaviour. No amount of clicking the interface
@@ -950,6 +951,61 @@ this entry is the other half.
 **Regression coverage.** Incidental and strong: any spec that creates a
 throwaway account fails when this returns, which is most of the suite. Nothing
 asserts the *status code*, which is the part being complained about here.
+
+---
+
+## DEF-20
+
+**Completing registration, and completing a password reset, answered 500**
+
+| | |
+| --- | --- |
+| Severity | High |
+| Priority | P1 |
+| Status | Fixed — `06bbcb9` |
+| Component | `POST /auth/verify`, `POST /auth/reset-password` |
+| Requirement | R-30 |
+| Environment | All |
+| Found by | **The first spec ever to walk the registration path** |
+
+**Steps to reproduce.** Register an account. Enter the verification code.
+
+**Expected.** The address is confirmed and the account is signed in.
+
+**Actual.** 500, and "An unexpected error occurred" on the confirm screen.
+
+**And the account was fine.** It had been created, the address had been
+verified, and it signed in perfectly afterwards — the failure was entirely in
+answering. So the person is told registration failed, by an application that
+has just completed it. They retry, the code is now spent, and the second
+attempt fails for real.
+
+**Root cause.** Both routes answer `SessionSchema`, whose `UserSchema`
+has required `role` and `tier` since those columns were added. Both select
+only `id, email, name` and return a user without them, so
+`fast-json-stringify` threw `"role" is required!` on the way out. Only
+`POST /auth/login` was updated when the fields arrived.
+
+Note where this fails: not on input validation, where a missing field is
+reported as a 422 naming it, but on **response serialisation**, where it is an
+unhandled 500. A schema that is enforced in both directions catches the
+caller's mistakes loudly and its own quietly.
+
+**The same shape as [DEF-06](#def-06).** A shared schema gained fields and not
+every handler feeding it was found. That is twice now, which makes it a
+pattern rather than an incident: the thing to check when a shared type changes
+is every producer of it, and the compiler did not help because the row type
+was written by hand to match the query.
+
+**Why it went unnoticed for so long.** Registration was unexercised at any
+layer. Every spec in the suite takes its account from `POST /test/users`,
+which inserts a row directly — correct for a spec about something else, and it
+meant nothing had ever walked the path a person walks. The reset-password half
+is still unexercised and was found by reading, not by running.
+
+**Regression coverage.** TC2 drives registration end to end through the
+browser, including the code, and asserts the session afterwards. The
+reset-password half has none.
 
 ---
 
