@@ -154,7 +154,12 @@ In order of what it would buy:
 
 1. A cause for DEF-08, or a decision to accept it with the evidence attached.
 2. Handling the pool failure in DEF-19 as a 503 rather than an unhandled 500.
-3. A container build in CI, which is the one environment nothing verifies.
+3. Either run the compose stack once or stop the README leading with it. It is
+   the first command offered for running the application locally and has never
+   been executed. Not a production concern - Render deploys the Node runtime
+   and `render.yaml` says so explicitly, because the Dockerfile was never
+   exercised - so this is about whether a newcomer's first command works, not
+   about what ships.
 
 And if paid tiers come into scope, one parameter unblocks R-26 and the
 product's own differentiator: a `tier` on `POST /test/users`. The notification
