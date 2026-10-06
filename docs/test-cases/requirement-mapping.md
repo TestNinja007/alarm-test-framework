@@ -43,23 +43,31 @@ use correctly.
 | **R-33** | A group can be created, renamed and deleted. An alarm can be moved between groups, into a group from none, and out of a group to none. |
 | **R-34** | An alarm can be edited and deleted by its owner, and only by its owner. |
 
-These belong in the application README beside R-01 to R-28, so the plan, the
-cases and the source keep sharing one set of numbers.
+These now live in the application README beside R-01 to R-28, which is where
+R-13 to R-28 were written out too — they had been carried as numbers with no
+sentences, which is DEF-17 and what blocked the matrix. The README is the one
+set of numbers the plan, the cases and the source share.
+
+The matrix built from them is [`docs/traceability.md`](../traceability.md),
+generated rather than written.
 
 ## Still uncovered by any case
 
-Listed so the gap is visible rather than implied. All are P1 by the plan's own
-criterion — they fail silently.
+Nothing, now. Every one of the 34 requirements has at least one case against
+it — see [the matrix](../traceability.md), which is generated and will say so
+or not without anyone remembering to update this.
 
-| Requirement | Subject |
-| --- | --- |
-| R-04 | `monthly_day` skipping months too short for the date |
-| R-05 | `monthly_nth`, including months with no fifth weekday |
-| R-06 | Spring forward — a local time that does not exist |
-| R-07 | Fall back — a local time that happens twice |
-| R-08 | Two enabled alarms refused the same instant |
-| R-27 | A self-destructing alarm removing itself |
-| — | Within-day repetition at second and minute intervals |
+Thirteen requirements have a case and no spec, which is a different and
+honester statement than the one this section used to make.
 
-The last one has no requirement number yet and is one of the product's two
-stated differentiators.
+## One mapping worth a second look
+
+`TC10b` in the groups spec asserts R-10 — that deleting a group deletes its
+alarms and the confirmation names how many. But it is numbered against TC10
+(CRUD on an alarm group), while R-10's own cases are TC30 and TC51. So the
+matrix reports R-10 as having no spec, which is true by the numbering and
+misleading about the coverage.
+
+Left as it stands rather than quietly re-pointed: the case numbering belongs
+to whoever designed the cases, and a matrix that is massaged to look complete
+is the thing this document exists to prevent.
