@@ -51,13 +51,12 @@ container.
 | [DEF-14](#def-14) | The alarms table was announced as "this folder" on a page that is not one | Low | P3 | Fixed | Exploratory, local |
 | [DEF-15](#def-15) | A documented rule the application no longer had | Low | P2 | Fixed | Documentation review |
 | [DEF-16](#def-16) | A failing mail check reported no reason | Low | P3 | Fixed | While diagnosing DEF-02 |
-| [DEF-17](#def-17) | Sixteen requirements are cited by the test cases and written down nowhere | Low | P2 | **Open** | Documentation review |
+| [DEF-17](#def-17) | Sixteen requirements are cited by the test cases and written down nowhere | Low | P2 | Fixed | Documentation review |
 | [DEF-18](#def-18) | Authentication throughput is bounded by scrypt on four threads | Informational | — | By design | Load test |
 | [DEF-19](#def-19) | A database connection the pool cannot obtain becomes an unhandled 500 | Medium | P2 | **Open** | **Automated test** |
 | [DEF-20](#def-20) | Completing registration, and completing a password reset, answered 500 | High | P1 | Fixed | **Automated test** |
 
-Two are open. DEF-17 is the gap the next deliverable has to close before it
-can be built. DEF-08 is the more interesting one: it was recorded with a
+Three are open, and DEF-17 is no longer one of them. DEF-08 is the more interesting one: it was recorded with a
 confident root cause, three experiments disproved that cause, and the entry now
 carries the disproof rather than a tidier story. A register that only ever
 accumulates correct diagnoses is a register nobody checked.
@@ -823,7 +822,7 @@ why it is unhappy" is a defect class in its own right.
 | --- | --- |
 | Severity | Low |
 | Priority | P2 |
-| Status | **Open** |
+| Status | Fixed — `76ef520` |
 | Component | Requirements, README |
 | Requirement | R-13 to R-28 |
 | Environment | — |
@@ -854,8 +853,18 @@ R-34, in one place that both repositories cite. The application README is the
 natural home, since R-01 to R-12 already live there and the mapping document
 already says the rest belong beside them.
 
-This is the work item that blocks the next deliverable, which is why it is
-filed as a defect rather than left as a note.
+**Fixed.** R-13 to R-28 are written out in the application README beside
+R-01 to R-12, and R-29 to R-34 moved there from the framework's mapping
+document, so all thirty-four share one place. Every figure was taken from the
+code rather than remembered — ten characters for a password, fifteen minutes
+and five attempts for a verification code, ten failed sign-ins per
+fifteen-minute window, two hundred characters for a spoken message.
+
+**Regression coverage.** Structural:
+[](../../scripts/traceability.py) reads the
+requirements out of that table, so a requirement cited by a case and missing
+from it appears in the matrix as a row with no rule rather than passing
+unnoticed.
 
 ---
 
