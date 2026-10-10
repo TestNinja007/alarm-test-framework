@@ -120,11 +120,17 @@ class TestCodesAreConsumedAndBounded:
         """
         assert self._verification(db, api.user_id) is None
 
-    def test_a_code_is_stored_with_its_expiry_fifteen_minutes_out(self, db):
+    def test_a_code_is_stored_with_its_expiry_fifteen_minutes_out(self, db, reachable):
         """
         R-15's fifteen minutes, as the row records it rather than as the API
         enforces it. Registration is needed to produce one, so this uses a
         newly registered account rather than the verified throwaway.
+
+        Takes `reachable` although it never touches it: these two register
+        over HTTP without going through the `api` fixture, so without it an
+        application that is simply not running made them FAIL rather than
+        skip - reporting a configuration state as a defect, which is the one
+        thing this layer is careful about everywhere else.
         """
         email = "verify-row-" + str(datetime.datetime.now().timestamp()).replace(".", "") + "@example.test"
         registered = requests.post(
@@ -155,7 +161,7 @@ class TestCodesAreConsumedAndBounded:
         # only meaningful against a known, small code space.
         assert row["code"].isdigit() and len(row["code"]) == 6, row["code"]
 
-    def test_a_wrong_attempt_is_counted_in_the_row(self, db):
+    def test_a_wrong_attempt_is_counted_in_the_row(self, db, reachable):
         """
         R-16 allows five attempts, and the counter is what enforces it. If it
         lived only in memory the limit would reset whenever the process did,
