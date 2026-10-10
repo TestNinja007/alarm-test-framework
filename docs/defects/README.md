@@ -42,7 +42,7 @@ container.
 | [DEF-05](#def-05) | Disabling an alarm did not stop it speaking | High | P1 | Fixed | Exploratory, local |
 | [DEF-06](#def-06) | Seeded accounts could not sign in after a fresh seed | High | P1 | Fixed | Exploratory, local |
 | [DEF-07](#def-07) | The production build failed: devDependencies were skipped | High | P1 | Fixed | Deployment failure |
-| [DEF-08](#def-08) | Database-backed endpoints show multi-second maxima under load — cause not identified | Medium | P1 | **Open** | Load test |
+| [DEF-08](#def-08) | Database-backed endpoints show multi-second maxima under load — cause not identified | Medium | P1 | **Open — not reproducible on the current machine** | Load test |
 | [DEF-09](#def-09) | An occurrence count of zero was accepted and silently meant "never ends" | Medium | P1 | Fixed | **Automated test** |
 | [DEF-10](#def-10) | An alarm could not be created without first creating a group | Medium | P2 | Fixed | Exploratory, local |
 | [DEF-11](#def-11) | A CRLF checkout broke the container entrypoint | Medium | P3 | Fixed | Configuration review |
@@ -432,7 +432,7 @@ version is pinned by file rather than asserted by a test.
 | --- | --- |
 | Severity | Medium |
 | Priority | P1 |
-| Status | **Open — originally diagnosed as the connection pool; that was wrong** |
+| Status | **Open — not reproducible as of 10 October; originally diagnosed as the connection pool, which was wrong** |
 | Component | Not established. Not the application's own request handling. |
 | Requirement | — (non-functional) |
 | Environment | Local, one process, PostgreSQL 18, Windows |
@@ -589,6 +589,44 @@ the translation replaced the original. That distinction is the whole question
 here — a drained queue and a dead connection point at different causes — so
 the underlying message is now carried as `cause` and logged as its own field
 (`99a3f55`). The next occurrence will say which.
+
+### The instrumented run, 10 October 2026 — it did not reproduce
+
+k6 was installed and the profiles were run with the phase breakdown this entry
+asked for. Full numbers in
+[the run](../../k6/results/2026-10-10-instrumented-run.md).
+
+| Profile | Requests | Failed | Max | `blocked` max | `connecting` max |
+| --- | --- | --- | --- | --- | --- |
+| load, 20 VUs | 16,514 | 0.00% | 303ms | 1.84ms | 1.69ms |
+| stress, to 100 VUs | 101,501 | 0.00% | 287ms | 2.38ms | 580µs |
+
+**Five times the users that found the fault, and the maximum went down.**
+
+The prediction written above was that a reproduction would put the ten-second
+cluster in `blocked` or `connecting`, and that `waiting` would clear the
+application. There was no cluster to place: across 118,000 requests the
+connection path never cost more than a couple of milliseconds, and every
+request was answered.
+
+**What this settles.** It is not the request handling and it is not load. The
+same code at five times the original load produces a maximum two orders of
+magnitude smaller. The application had already been ruled out by comparing the
+client against the server's own request log; this says the same from the other
+direction.
+
+**What it does not settle.** What the fault actually was. A symptom that does
+not reproduce has not been explained, and the direction recorded above —
+interference on the connection path, on this machine — is still a direction.
+It is better supported, because the application has now been ruled out twice
+by independent measurements, but it has not been demonstrated. What changed
+between the runs is the machine rather than the code, including a Windows
+version change between sessions.
+
+**So it stays open, and the status is more precise than it was.** Reproducible
+when it happens, absent today, cause not established, with the instrumentation
+in place to localise it the next time it appears. Closing it would be claiming
+a fix that nobody made.
 
 **Why a p95 would have hidden all of this.** Every p95 threshold in the profile
 passed, on both runs. The measurement that found it was the maximum.

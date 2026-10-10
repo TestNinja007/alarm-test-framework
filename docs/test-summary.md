@@ -150,9 +150,11 @@ High defects, every in-scope requirement traceable to a spec, and the suite
 green on the target branch.
 
 One honest caveat to ship alongside, and it is not R-26: DEF-08 is a
-reproducible performance fault with no established cause. Its reporting is at
-least correct now - DEF-19 made the pool failure it produces answer 503 rather
-than an unhandled 500 - but correct reporting of a fault is not a fix for it. That belongs in a
+performance fault with no established cause. It did not reproduce on 10
+October under five times the load that found it, with instrumentation that
+would have localised it - which rules out the request handling and rules out
+load, and explains nothing. A symptom that has stopped happening has not been
+understood, so it stays open. That belongs in a
 release note rather than a footnote. R-26 is uncovered on purpose, which is a
 different sentence and should be read as one.
 
