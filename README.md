@@ -90,12 +90,14 @@ database/               pytest: the database layer
   conftest.py           a connection, and enough HTTP and browser to make rows
   tests/                cascades, result sets, storage, recurrence, UI actions
 docs/
+  revision-guide.md     the testing work explained for learning: what, why, rejected
   test-cases/           cases exported from TestQuality
   defects/              every defect found, how it was found, what guards it
 scripts/
   traceability.py       regenerates the matrix from requirements, cases, specs
   mark-automated.py     sets test_is_automated in the exports, for re-import
   export-core-cases.py  writes TC1-TC10 in the TestQuality import schema
+  study-pack.py         gathers the revision guide and its reading list for upload
 k6/
   smoke|load|stress|spike|auth.js    the load profiles
   observability/        Prometheus and Grafana, for watching a run

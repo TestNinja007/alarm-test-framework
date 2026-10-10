@@ -24,3 +24,6 @@ blob-local/
 site/
 database-report/
 playwright-results.json
+
+# The revision study pack. Built from the guide by scripts/study-pack.py.
+study-pack/

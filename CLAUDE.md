@@ -114,6 +114,19 @@ It covers why there are two stacks, what the layer asserts, what it found, and
 what is deliberately not in it. If the layer changes materially, that document
 goes stale and should be updated with it.
 
+## The revision guide
+
+`docs/revision-guide.md` explains the testing work for someone *learning* it —
+each decision as what was done, why, and what was rejected — with questions at
+the end of each section. `scripts/study-pack.py` gathers it and every file its
+reading list names into `study-pack/`, ready to upload to a Claude Project.
+
+**It holds figures as of a date, and it drifts like any other document.** When
+the testing changes materially — a new stack, new defects, a feature gaining
+coverage — update the guide in the same change, and its "as of" date with it.
+The pack reads its file list from the guide, so adding a file to the guide's
+reading list is the only step needed to include it.
+
 ## Conventions that are easy to get wrong
 
 **Spec naming decides where it runs.** `*.api.spec.ts` runs without a browser;
