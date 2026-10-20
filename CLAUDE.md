@@ -107,23 +107,29 @@ design.**
 
 ### Open, in the order I would pick them up
 
-1. **DEF-08** — database-backed endpoints show multi-second maxima under load
-   and the cause is not established. The instrumentation to answer it is
-   written and unit-tested (`k6/lib/diagnose.js`, phase breakdown per request),
-   but **k6 is not installed on this machine, so no instrumented run exists.**
-   The scripts are written and untested in exactly the way this project
-   criticises elsewhere, and that is recorded in the defect entry rather than
-   glossed.
-2. **Verification and reset codes are stored as issued, not hashed.** Not a
+1. **Two features have no requirements and no designed test cases** —
+   sequences, and the speech service. Both work and both have engineering
+   tests written alongside them, but nothing in the documented rules mentions
+   either, so the traceability matrix does not know they exist. Requirements
+   and cases are the owner's to write; this is the largest gap in the test
+   effort and it grows with every feature added before it is closed.
+2. **DEF-08 is open and does not currently reproduce.** k6 is installed, and
+   the instrumented run on 10 October showed nothing: 101,501 requests at 100
+   users, zero failures, maximum 287ms, the connection path never above a few
+   milliseconds. That rules out the request handling and rules out load, and
+   explains nothing — a symptom that stops happening has not been understood.
+   The instrumentation is in place to localise it if it returns. See
+   `k6/results/2026-10-10-instrumented-run.md`.
+3. **Verification and reset codes are stored as issued, not hashed.** Not a
    failure against any documented rule, so it is not filed as a defect. It is
    a decision waiting for a human, with the argument both ways written into
    `database/tests/test_credentials_and_sessions.py`.
-3. **`docs/test-cases/core-cases.csv` is generated and not imported.** It holds
+4. **`docs/test-cases/core-cases.csv` is generated and not imported.** It holds
    TC1–TC10 for TestQuality; importing it creates records in the user's test
    management and is their action, not mine.
-4. **`performance.yml` has never run.** It exists and has no run history, so
+5. **`performance.yml` has never run.** It exists and has no run history, so
    the k6 profiles have only local results behind them.
-5. **The compose stack has never been run.** It is the first command the
+6. **The compose stack has never been run.** It is the first command the
    application's README offers for running locally. A newcomer's-first-command
    problem, not a shipping one — Render deploys the Node runtime.
 
