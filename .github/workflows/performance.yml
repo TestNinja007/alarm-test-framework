@@ -91,7 +91,7 @@ jobs:
           SEED_PROFILE: demo
           REGISTRATION_OPEN: '1'
           MAIL_TRANSPORT: capture
-          TTS_PROVIDER: none
+          # Speech is off: no SPEECH_SERVICE_URL. TTS_* belong to the speech service now.
           SESSION_SECRET: ci-session-secret-at-least-32-characters-long
           LOG_LEVEL: warn
         run: |

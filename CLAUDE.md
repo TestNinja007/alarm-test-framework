@@ -27,6 +27,20 @@ deleted, along with the `@db` tag and the `describeWithDatabase` fixture.
 
 *Agreed 6 October 2026.* Before it was written down, TC51, TC52 and TC55 were
 built as Playwright specs against that helper — the wrong side of this line.
+
+### Contract tests live with the application, not here
+
+*Decided 20 October 2026, when speech became its own service.*
+
+Contract tests between the main API and the speech service are a third kind of
+test, and they live in the **application** repository — the consumer's half
+beside the main API's client, the provider's half beside the speech service.
+That is where Pact puts them, and for a reason: each half has to run in the
+same build as the code it describes, so a change that breaks the contract fails
+in the change's own CI rather than in this repository later.
+
+This repository's part is the database layer's: that the two services each own
+their own data. See `database/tests/test_speech_service.py`.
 They now live in `database/tests/`, and the traceability matrix credits them
 there: [`scripts/specscan.py`](scripts/specscan.py) reads both stacks, so a
 case automated in pytest counts exactly as one automated in Playwright.
@@ -63,16 +77,23 @@ If this changes, the harness needs one thing: a `tier` on `POST /test/users`.
 
 ## Where things stand
 
-*Last updated 6 October 2026. Update this when it stops being true — it is the
+*Last updated 20 October 2026. Update this when it stops being true — it is the
 first thing a session with no memory of the work should read.*
 
 Both halves of the agreed shape are **built and green**.
 
+**The application is two services now.** Generated speech was extracted into
+its own service on 20 October — the one microservice, done to learn and
+demonstrate microservices testing. The database layer's helpers are
+schema-aware as a result: every schema question names `public` (the main API)
+or `speech`, because two tables now exist in both and a question by name alone
+finds whichever answers first.
+
 | | Count | |
 | --- | --- | --- |
 | Playwright | 78 | api 49, chromium 27, firefox 27, webkit 27 |
-| pytest | 62 | every one of the 10 tables examined |
-| Application unit tests | 38 | in the other repository |
+| pytest | 68 | both services' schemas, and the boundary between them |
+| Application tests | 91 | in the other repository — 75 in the main API, 16 in the speech service, including the contract tests |
 | CI | 6 jobs | green on both repositories |
 
 Traceability: 34 of 34 requirements have a case, **33 of 34 have a spec**, 57

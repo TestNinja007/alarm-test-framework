@@ -86,7 +86,7 @@ jobs:
           SEED_PROFILE: demo
           REGISTRATION_OPEN: '1'
           MAIL_TRANSPORT: capture
-          TTS_PROVIDER: none
+          # Speech is off: no SPEECH_SERVICE_URL. TTS_* belong to the speech service now.
           SESSION_SECRET: ci-session-secret-at-least-32-characters-long
           LOG_LEVEL: warn
         run: |
@@ -198,6 +198,8 @@ jobs:
     env:
       BASE_URL: http://127.0.0.1:8080
       DATABASE_URL: postgresql://alarm_app:alarm_app@127.0.0.1:5432/alarm_configurator
+      SPEECH_URL: http://127.0.0.1:8090
+      SPEECH_SERVICE_TOKEN: ci-speech-service-token
 
     steps:
       - name: Check out the framework
@@ -242,7 +244,7 @@ jobs:
           SEED_PROFILE: demo
           REGISTRATION_OPEN: '1'
           MAIL_TRANSPORT: capture
-          TTS_PROVIDER: none
+          # Speech is off: no SPEECH_SERVICE_URL. TTS_* belong to the speech service now.
           SESSION_SECRET: ci-session-secret-at-least-32-characters-long
           LOG_LEVEL: warn
         run: |
@@ -260,6 +262,30 @@ jobs:
           done
           echo "The application never became ready. Its log:"
           cat app.log
+          exit 1
+
+      # The speech service - the one part of the application run as its own
+      # service. It migrates its own schema on start. The main API is left
+      # without a SPEECH_SERVICE_URL, so as far as the browser specs are
+      # concerned speech is off exactly as before; the database layer calls
+      # the speech service directly, which is what it needs to verify that
+      # each service owns its own data.
+      - name: Start the speech service
+        working-directory: app
+        env:
+          SPEECH_PORT: '8090'
+          TTS_PROVIDER: mock
+        run: |
+          node src/speech/dist/index.js > ../speech.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS "$SPEECH_URL/health" > /dev/null 2>&1; then
+              echo "Speech service ready after ${i}s."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "The speech service never became ready. Its log:"
+          cat ../speech.log
           exit 1
 
       - name: Install the database layer
@@ -285,6 +311,30 @@ jobs:
           python -m pytest tests -v
           --junit-xml=../database-report/results.xml
           --html=../database-report/index.html --self-contained-html
+
+      # The URL check above catches the obvious way to pass by skipping. This
+      # catches the rest: a test that skipped because a service was not up, a
+      # fixture that could not reach something, a precondition that was false.
+      # Locally those are configuration; in CI every one of them is a test that
+      # did not run while the job reported green. A skip here fails the job.
+      - name: Refuse any skip at all
+        if: always()
+        run: |
+          python - <<'PY'
+          import xml.etree.ElementTree as ET, sys, os
+          path = 'database-report/results.xml'
+          if not os.path.exists(path):
+              sys.exit("No results file - the database layer did not run.")
+          root = ET.parse(path).getroot()
+          suite = root.find('testsuite') if root.find('testsuite') is not None else root
+          skipped = int(suite.get('skipped', 0))
+          if skipped:
+              for case in suite.iter('testcase'):
+                  for s in case.iter('skipped'):
+                      print(f"SKIPPED {case.get('name')}: {s.get('message', '')}")
+              sys.exit(f"{skipped} database test(s) skipped in CI. Every one must run here.")
+          print("No skips.")
+          PY
 
       - name: Put the results on the run page
         if: always()
@@ -326,12 +376,14 @@ jobs:
           path: database-report/
           retention-days: 30
 
-      - name: Upload the application log
+      - name: Upload the application logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: app-log-database
-          path: app.log
+          path: |
+            app.log
+            speech.log
           retention-days: 7
 
   report:

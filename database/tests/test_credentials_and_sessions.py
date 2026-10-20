@@ -234,43 +234,6 @@ class TestCodesAreConsumedAndBounded:
         )
 
 
-class TestTheSpeechCacheIsContentAddressedAndNotPersonal:
-    def test_it_carries_no_owner(self, db):
-        """
-        `speech_audio` has no user_id, which is what makes it a cache rather
-        than personal data: two accounts asking for the same words share one
-        row. Worth asserting, because adding an owner later would silently
-        turn a shared cache into per-user storage that nothing cleans up when
-        an account goes.
-        """
-        columns = {
-            r["column_name"]
-            for r in db.rows(
-                """SELECT column_name FROM information_schema.columns
-                    WHERE table_name = 'speech_audio'""",
-            )
-        }
-
-        assert columns, "speech_audio should exist"
-        assert "user_id" not in columns, (
-            "an owner here would make this personal data with no cascade to remove it"
-        )
-        assert {"provider", "voice", "text", "bytes"} <= columns
-
-    def test_nothing_references_it_so_an_account_deletion_cannot_orphan_it(self, db):
-        referencing = db.rows(
-            """SELECT rel.relname AS from_table
-                 FROM pg_constraint con
-                 JOIN pg_class rel ON rel.oid = con.conrelid
-                 JOIN pg_class ref ON ref.oid = con.confrelid
-                WHERE con.contype = 'f' AND ref.relname = 'speech_audio'""",
-        )
-
-        assert referencing == [], (
-            "something points at the speech cache: " + str(referencing)
-        )
-
-
 def test_the_migration_ledger_records_every_file_that_exists(db):
     """
     The schema's version, read from the ledger rather than inferred.

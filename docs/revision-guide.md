@@ -33,7 +33,8 @@ the answer back — explaining is the test of understanding, recognising is not.
 9. [Continuous integration](#9-continuous-integration)
 10. [What is incomplete](#10-what-is-incomplete)
 11. [The lessons that kept coming back](#11-the-lessons-that-kept-coming-back)
-12. [The code to read alongside](#the-code-to-read-alongside)
+12. [Testing a microservice — the speech service](#12-testing-a-microservice--the-speech-service)
+13. [The code to read alongside](#the-code-to-read-alongside)
 
 ---
 
@@ -64,12 +65,19 @@ written definition of "correct" to test against.
 
 The split is about *kinds of question*, not tool preference. See section 5.
 
-**The numbers, as of 10 October 2026.**
+**Two services — one of them deliberately.** The application is a single
+monolith with one exception: generated speech was extracted into its own service
+on 20 October, to learn and demonstrate how microservices are tested. Section 12
+covers it. Everything else is one process and one database, and that is the
+right design for an application with one owner.
+
+**The numbers, as of 20 October 2026.**
 
 | | |
 | --- | --- |
 | Playwright specs | 78 — api 49, and 27 on each browser engine |
-| pytest tests | 62, covering all 10 tables |
+| pytest tests | 68, covering both services' schemas and the boundary between them |
+| Application tests | 91 — 75 in the main API, 16 in the speech service, including contract tests |
 | Requirements with a case | 34 of 34 |
 | Requirements with an automated spec | 33 of 34 |
 | Designed cases automated | 57 of 61 |
@@ -632,6 +640,12 @@ Stated plainly, because knowing the gaps is part of knowing the work.
 - **R-26 is uncovered on purpose** — it needs a paid tier, which is out of scope.
 - **The performance workflow has never run in CI**, and the Docker compose setup
   has never been run.
+- **The speech service is not deployed.** It runs locally and in CI only.
+  Production is unchanged — generated speech was already off there.
+- **Its data isolation is a convention, not a permission.** Both services use
+  one database role; a separate role needs a superuser.
+- **The speech service has no designed test cases** — only the engineering
+  tests written alongside it, as with sequences.
 
 ---
 
@@ -674,6 +688,149 @@ wrong way. They now live in `CLAUDE.md` in each repository.
 
 ---
 
+## 12. Testing a microservice — the speech service
+
+→ `alarm-configurator/src/speech/`, `alarm-configurator/src/api/src/speech/`,
+`database/tests/test_speech_service.py`
+
+### Why there is one at all
+
+- **What:** generated speech runs as its own service, with its own process, its
+  own data and its own tests. The main API calls it over HTTP.
+- **Why:** to learn and demonstrate microservices testing. **Not** because the
+  application needed it — one application with one owner has none of the
+  problems microservices solve. Say it that way: *"I extracted the speech service
+  to practise contract testing"* is honest and strong; *"the app needed
+  microservices"* is not true.
+- **Why speech:** measured, not guessed. About 370 lines owning one table that
+  nothing referenced, and no backend code outside it imported it — its only
+  consumer was the browser. Mail was tangled into four places, including the
+  health check that caused DEF-02.
+- **Rejected:** converting the whole application — a rewrite of working code for
+  no benefit, with every existing test needing rework.
+
+### Splitting responsibilities
+
+The main API kept what belongs to the **user** — signing in, the tier gate, the
+per-user rate limit. The speech service took what belongs to **speech** — the
+provider, the cache, the bytes. The browser did not change at all: same routes,
+same shapes. *A good extraction is invisible to the callers of the thing extracted.*
+
+The speech service's routes are **versioned** (`/v1/...`), because they are now
+an interface between two services. Unversioned, every change would need both
+deployed together.
+
+### Contract testing — the skill this was for
+
+The idea: **check that two services agree, without running both together.**
+
+1. **The consumer** (the main API) runs its client against a mock that Pact
+   provides, and records every request it makes and every answer it relies on,
+   in a contract file.
+2. **The provider** (the speech service) replays every recorded request against
+   its real routes and fails if any answer differs.
+
+**The proof it works:** renaming a field in the speech service (`generated` →
+`wasGenerated`) failed its contract test — *even after its own unit test was
+updated to match*. Its team could fix their own tests; nothing they did on their
+side could satisfy the main API's recorded expectation. That is how a breaking
+change gets caught before deployment rather than in production.
+
+**Describe only what the consumer uses.** The first version of the audio
+interaction pinned `audio/wav`. That is only what the mock provider makes —
+ElevenLabs returns `audio/mpeg` — so the contract would have failed the first
+time it met real audio. Worse, it constrained bytes the main API never reads; it
+passes them straight through. The contract now asks for a status and an audio
+Content-Type, nothing about the bytes. *An over-specified contract stops the
+provider changing things nobody depends on.*
+
+**No secrets in the contract.** The file is committed, so it says "a valid
+token" as a placeholder, and the provider swaps in its real token as each
+request is replayed. A wrong token in the 401 interaction is left as recorded.
+
+**Provider states** put the service in the condition each interaction needs —
+"audio exists", "generation is switched off". The "audio exists" state carries
+the example bytes in the contract itself, so they live in one place rather than
+being copied into both sides.
+
+### Testing a service in isolation
+
+The speech service's own tests replace its one dependency — ElevenLabs — with a
+fake `fetch`, so every failure can be produced on demand: a spent quota, a bad
+key, a provider that cannot be reached. *Waiting for a real service to fail in
+each of those ways is not a test plan.*
+
+Its storage sits behind an interface with an in-memory version, so the contract
+and unit tests run in a CI job with no database. That is not cheating: the
+contract is about the HTTP conversation, and persistence is checked separately
+by the database layer against real PostgreSQL.
+
+### When a dependency fails — the part that does not exist in a monolith
+
+A function call returns or throws. A call to another service can also be
+refused at the door, hang until someone gives up, come back busy, or come back
+with an answer that will never change. Each wants a different response:
+
+| What happened | Status | Meaning to the caller |
+| --- | --- | --- |
+| Down, too slow, or busy | **503** + `Retry-After` | It may recover — try later |
+| Answered, and refused for good (bad provider key) | **502** | Asking again gets the same answer |
+| Rejected the main API's token | **502**, logged as an error | An operator problem — nothing else will ever report it |
+| No speech service configured | 404, settings say off | Reads the same as a feature never built |
+
+Three things worth being able to explain:
+
+- **A timeout is not optional.** A service that never answers would hang every
+  request touching it — which is how one slow dependency takes a site down. The
+  client gives up after a fixed time, and a test proves it.
+- **The main API's health check does not depend on speech.** Stopping the speech
+  service mid-run left the main API healthy. That is DEF-02 learned properly: a
+  dependency that should be *reported* must not be made *load-bearing*.
+- **Settings say "unavailable" before anything fails.** So the browser uses its
+  own voice from the start, rather than failing on the first alarm and falling
+  back then.
+
+### Data: schema per service
+
+- **What:** the speech service owns a `speech` schema; the main API's schema no
+  longer holds any speech data.
+- **Why not a separate database:** the local database user can create a schema
+  but not a database or a role. Schema per service is one of the three
+  recognised ways to keep a service's data private.
+- **The honest limit:** both services connect as the same role, so the
+  isolation is **a convention enforced by tests, not a permission**. The
+  database layer fails if the main schema ever holds speech data again, if a
+  foreign key crosses the boundary, or if the two migration ledgers overlap.
+- **Proven:** planting a `speech_audio` table back in the main schema made two
+  of those tests fail.
+
+### Three bugs found while building it — all in tests
+
+1. **A security test that tested the opposite of its claim.** "Fails closed with
+   no token configured" called `configWith({}, undefined)`. In JavaScript,
+   *passing `undefined` to a parameter with a default uses the default* — so it
+   configured a token and tested the open path. Fixed, then proven by breaking
+   the server to fail open and watching the test catch it.
+2. **A contract that was too narrow** — the `audio/wav` pin above.
+3. **Database tests that passed for the wrong reason.** Once `speech_audio`
+   existed in two schemas, helpers that asked about a table by name alone
+   quietly found the speech service's copy and kept passing. Every schema
+   question now names its schema.
+
+### Test yourself
+
+1. Why was speech chosen to extract, rather than mail or the whole application?
+2. What does a contract test check, and why does neither side need the other running?
+3. A provider's team renames a field and updates their own unit tests. Why does the build still fail?
+4. Why did the audio contract stop specifying `audio/wav`? What principle does that illustrate?
+5. Why can't the contract file contain the real service token, and how does verification work without it?
+6. What is the difference between a 503 and a 502 from the main API, and why does it matter?
+7. Why must the main API's health check not depend on the speech service?
+8. What is "schema per service", and what is the honest limit of how it is done here?
+9. Explain the default-parameter bug. Why is it especially dangerous in a security test?
+
+---
+
 ## The code to read alongside
 
 Upload these with this guide. Paths are relative to each repository.
@@ -701,6 +858,15 @@ Upload these with this guide. Paths are relative to each repository.
 - `database/conftest.py` — the database layer's plumbing
 - `database/tests/test_cascades.py` — declarations versus behaviour
 - `database/tests/test_result_sets.py` — paging and set comparison
+- `database/tests/test_speech_service.py` — each service owning its own data
+
+**The speech service — testing a microservice**
+- `alarm-configurator/src/api/src/speech/client.ts` — calling another service, and every way it can fail
+- `alarm-configurator/src/api/src/speech/client.test.ts` — a dependency failing, on demand
+- `alarm-configurator/src/api/src/speech/client.pact.test.ts` — the contract, from the consumer
+- `alarm-configurator/src/speech/src/contract.pact.test.ts` — the contract, from the provider
+- `alarm-configurator/src/speech/src/server.ts` — the service itself
+- `alarm-configurator/src/speech/src/server.test.ts` — the service in isolation
 
 Both repositories are public on GitHub:
 [alarm-test-framework](https://github.com/TestNinja007/alarm-test-framework) ·

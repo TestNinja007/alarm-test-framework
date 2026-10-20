@@ -56,7 +56,7 @@ def _load_env() -> "dict[str, str]":
             key, _, value = line.partition("=")
             values[key.strip()] = value.strip()
     # A real environment variable wins, so CI needs no file.
-    for key in ("BASE_URL", "DATABASE_URL"):
+    for key in ("BASE_URL", "DATABASE_URL", "SPEECH_URL", "SPEECH_SERVICE_TOKEN", "SPEECH_SCHEMA"):
         if os.environ.get(key):
             values[key] = os.environ[key]
     return values
@@ -66,6 +66,16 @@ ENV = _load_env()
 BASE_URL = ENV.get("BASE_URL", "http://127.0.0.1:8080")
 API = BASE_URL + "/api/v1"
 DATABASE_URL = ENV.get("DATABASE_URL")
+
+# The database holds two services' data now. The main API's tables are in
+# `public`; the speech service owns `speech`. Every schema question has to say
+# which one it means - a helper that asks by table name alone finds whichever
+# schema answers first, and `schema_migrations` and `speech_audio` exist in
+# both. See "Data: schema per service" in the application's CLAUDE.md.
+MAIN_SCHEMA = "public"
+SPEECH_SCHEMA = ENV.get("SPEECH_SCHEMA", "speech")
+SPEECH_URL = ENV.get("SPEECH_URL", "http://127.0.0.1:8090")
+SPEECH_SERVICE_TOKEN = ENV.get("SPEECH_SERVICE_TOKEN")
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: "list[pytest.Item]") -> None:
@@ -112,39 +122,55 @@ class Db:
         found = self.row("SELECT count(*) AS n FROM " + table + clause, params)
         return int(found["n"]) if found else 0
 
-    def indexes(self, table: str) -> "dict[str, str]":
+    def indexes(self, table: str, schema: str = MAIN_SCHEMA) -> "dict[str, str]":
         """Index name to its definition, for asserting that a constraint exists."""
         return {
             r["indexname"]: r["indexdef"]
             for r in self.rows(
-                "SELECT indexname, indexdef FROM pg_indexes WHERE tablename = %s", (table,)
+                """SELECT indexname, indexdef FROM pg_indexes
+                    WHERE schemaname = %s AND tablename = %s""",
+                (schema, table),
             )
         }
 
-    def column(self, table: str, name: str) -> "dict[str, Any] | None":
+    def column(self, table: str, name: str, schema: str = MAIN_SCHEMA) -> "dict[str, Any] | None":
         return self.row(
             """SELECT data_type, is_nullable, column_default
                  FROM information_schema.columns
-                WHERE table_name = %s AND column_name = %s""",
-            (table, name),
+                WHERE table_schema = %s AND table_name = %s AND column_name = %s""",
+            (schema, table, name),
         )
 
-    def foreign_keys(self, table: str) -> "list[dict[str, Any]]":
+    def tables(self, schema: str) -> "set[str]":
+        """Every table in one schema - one service's whole footprint."""
+        return {
+            r["table_name"]
+            for r in self.rows(
+                """SELECT table_name FROM information_schema.tables
+                    WHERE table_schema = %s AND table_type = 'BASE TABLE'""",
+                (schema,),
+            )
+        }
+
+    def foreign_keys(self, table: str, schema: str = MAIN_SCHEMA) -> "list[dict[str, Any]]":
         """Every foreign key on a table, with what it does on delete."""
         return self.rows(
             """SELECT con.conname      AS name,
                       att.attname      AS column_name,
                       ref.relname      AS references_table,
+                      refns.nspname    AS references_schema,
                       con.confdeltype  AS on_delete
                  FROM pg_constraint con
-                 JOIN pg_class rel  ON rel.oid = con.conrelid
-                 JOIN pg_class ref  ON ref.oid = con.confrelid
+                 JOIN pg_class rel        ON rel.oid = con.conrelid
+                 JOIN pg_namespace relns  ON relns.oid = rel.relnamespace
+                 JOIN pg_class ref        ON ref.oid = con.confrelid
+                 JOIN pg_namespace refns  ON refns.oid = ref.relnamespace
                  JOIN pg_attribute att
                       ON att.attrelid = con.conrelid
                      AND att.attnum = con.conkey[1]
-                WHERE con.contype = 'f' AND rel.relname = %s
+                WHERE con.contype = 'f' AND relns.nspname = %s AND rel.relname = %s
                 ORDER BY con.conname""",
-            (table,),
+            (schema, table),
         )
 
 
