@@ -386,6 +386,8 @@ jobs:
             speech.log
           retention-days: 7
 
+  # Builds the report on every run, pull requests included. Publishing it is
+  # the next job's: see there for why the two are apart.
   report:
     name: report
     if: always()
@@ -395,18 +397,6 @@ jobs:
 
     permissions:
       contents: read
-      pages: write
-      id-token: write
-
-    # Pages refuses concurrent deployments, and the workflow-level group
-    # cancels in progress, which would abandon a half-finished deploy.
-    concurrency:
-      group: pages
-      cancel-in-progress: false
-
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
 
     steps:
       - uses: actions/checkout@v4
@@ -460,8 +450,6 @@ jobs:
           path: playwright-report/
           retention-days: 30
 
-      # Only from main. A pull request from a fork cannot deploy Pages, and a
-      # branch's results are not the published ones.
       # Both reports stay in the format their own tool produced: merging them
       # would mean going through JUnit XML, the only format both speak, which
       # discards the Playwright traces and screenshots. The front page is the
@@ -486,7 +474,39 @@ jobs:
         with:
           path: site/
 
+  # Only main publishes: a branch's results are not the published ones, and a
+  # pull request from a fork could not deploy Pages anyway.
+  #
+  # It is a job of its own because GitHub checks the github-pages environment
+  # when a job starts, before any step's `if`. While the environment sat on
+  # the report job, every pull request was refused there outright ("not
+  # allowed to deploy to github-pages"), so its report was never built, and
+  # the check went red on a run whose tests had all passed.
+  #
+  # always(): the report is published when tests fail too. That is the run
+  # people most need to read.
+  publish:
+    name: publish
+    if: always() && github.ref == 'refs/heads/main' && needs.report.result == 'success'
+    needs: report
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      pages: write
+      id-token: write
+
+    # Pages refuses concurrent deployments, and the workflow-level group
+    # cancels in progress, which would abandon a half-finished deploy.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
       - name: Publish
         id: deploy
-        if: github.ref == 'refs/heads/main'
         uses: actions/deploy-pages@v4

@@ -5,9 +5,9 @@ what now guards it.
 
 The register lives here rather than in the application repository because it is
 a test deliverable — the test plan promises it — and because the interesting
-column is not the fix. It is **how found**. A list of twenty-two defects says
-little; nineteen defects sorted by the activity that caught them says what the
-testing is actually worth.
+column is not the fix. It is **how found**. A list of twenty-three defects says
+little; twenty-three defects sorted by the activity that caught them says what
+the testing is actually worth.
 
 Defects are filed against the product. Where a fix exists the commit is named,
 and lives in
@@ -57,6 +57,7 @@ container.
 | [DEF-20](#def-20) | Completing registration, and completing a password reset, answered 500 | High | P1 | Fixed | **Automated test** |
 | [DEF-21](#def-21) | The sign-in form had no client-side field validation, contrary to A-02 | Low | P3 | Fixed | **Automated test** |
 | [DEF-22](#def-22) | The create wizard scrolled sideways at phone width | Medium | P2 | Fixed | **Automated test** |
+| [DEF-23](#def-23) | A time in the repeated fall-back hour resolved to its second instant once the clocks had gone back | Medium | P1 | Fixed | **Automated test** |
 
 Three are open, and DEF-17 is no longer one of them. DEF-08 is the more interesting one: it was recorded with a
 confident root cause, three experiments disproved that cause, and the entry now
@@ -80,12 +81,12 @@ accumulates correct diagnoses is a register nobody checked.
 **Six defects were found by the automated suite.** That number is low for a
 reason worth stating rather than hiding: the suite was written after the
 product, so it inherited an application whose obvious faults had already been
-exercised by hand. Its value is the next twenty-two, not these. And the first it
+exercised by hand. Its value is the next twenty-three, not these. And the first it
 did catch, DEF-09, was the first fault in the application that nobody had found
 by using it — a wrong answer returned with a success status, which is precisely
 the kind a person does not notice and an assertion cannot miss.
 
-**Half of these were outside functional testing entirely.** Nine of twenty-two —
+**Two in five of these were outside functional testing entirely.** Nine of twenty-three —
 DEF-02, DEF-03, DEF-07, DEF-08, DEF-11, DEF-15, DEF-16, DEF-17 and DEF-18 —
 came from reading configuration, reading logs, a failed deploy, a load run, or
 comparing documentation against behaviour. No amount of clicking the interface
@@ -1246,6 +1247,75 @@ stumble into.
 **Regression coverage.** TC50 asserts no horizontal overflow on the dashboard
 and the wizard at 390px, and that the controls stay reachable — reachable, not
 visible without scrolling, because a form taller than a phone is ordinary.
+
+---
+
+## DEF-23
+
+**A time in the repeated fall-back hour resolved to its second instant once the clocks had gone back**
+
+| | |
+| --- | --- |
+| Severity | Medium |
+| Priority | P1 |
+| Status | Fixed — `138f54d` |
+| Component | Recurrence engine |
+| Requirement | R-07, R-08 |
+| Environment | All — wrong whenever the code ran while the alarm's zone was on its winter offset: for Toronto, 1 November to 14 March |
+| Found by | **TC39, in the first nightly run after the clocks went back**, and the application's own R-07 unit tests |
+
+**Steps to reproduce.** On any date between 1 November and 14 March, preview
+a daily alarm at 01:30 in America/Toronto across 7 November 2027, when the
+hour from 01:00 to 02:00 happens twice.
+
+**Expected.** R-07: one occurrence that day, at the first 01:30 — `-04:00`.
+
+**Actual.** One occurrence, at the second: `2027-11-07T01:30:00-05:00`. The
+same request made in October returned `-04:00`.
+
+**Root cause.** The engine turned a wall-clock time into an instant with
+Luxon's `DateTime.fromObject`. When a local time happens twice, Luxon chooses
+between the two instants using the zone's offset *at the moment the code
+runs*, read from the system clock. So R-07 held while Toronto was on summer
+time and broke the morning it was not. The application's test clock (T-02)
+never reached it: Luxon reads `Date.now()`, not the application's clock.
+
+**What it would have done in the product.** The browser polls for alarms that
+are due, and remembers each one it has fired by alarm and instant. On the
+night itself the feed offered the first 01:30 before the clocks went back and
+the second one after, as a different instant — so an open tab would have
+fired the alarm twice. It also produced false collisions (R-08): that night
+Toronto's 01:30 landed on 06:30Z, the same instant as 01:30 in Bogotá. Nothing
+stored was wrong, because occurrences are computed on each request and never
+stored. And the deployed site was down over 1 November with an expired
+database, so it is unlikely anyone met it.
+
+**Why only Medium.** One hour a year in each zone, and only for alarms set
+inside it. Functional, so P1 all the same.
+
+**Why it is worth a number anyway.** No code changed. TC39 passed on 31
+October and failed on 1 November because of the calendar, which is the case
+the nightly schedule exists for: it runs the suite against a fresh checkout of
+the application even on days nothing changed. It failed on the same assertion
+every night until the fix was merged, and passed again on 9 November. Left
+alone, it would have started passing on 14 March, when Toronto returns to
+summer time, and failed again the next November. A test that looks flaky by
+season is reporting a defect that depends on the date.
+
+**How it was diagnosed.** By pinning the system clock either side of the
+transition and running the same input. 15 October passed and 15 November
+failed; on 1 November itself, 05:45Z passed and 06:15Z failed, either side of
+the moment Toronto left summer time.
+
+**The fix.** The engine applies R-07 itself instead of inheriting Luxon's
+answer. For each date it takes the zone's offsets a day either side, keeps
+each candidate instant the zone really uses at that moment, and takes the
+earlier of two (R-07) or moves a skipped time forward by the gap (R-06).
+
+**Regression coverage.** TC39. In the application, the engine's suite now pins
+the system clock to a winter instant on purpose, and one block runs the R-07
+case with "now" before, during and after the transition, plus a poll made
+inside the repeated hour. Five of those fail against the old engine.
 
 ---
 
