@@ -1,4 +1,4 @@
-# Revision guide — the testing work on Nudge
+# Revision guide — the testing work on Nudgely
 
 A guide for *learning* the testing work, not for operating it. Every decision
 is written as **what was done → why → what was rejected**, and points at the
@@ -40,7 +40,7 @@ the answer back — explaining is the test of understanding, recognising is not.
 
 ## 1. The shape of it
 
-**What was tested.** Nudge, an alarm configurator: groups of alarms, recurrence
+**What was tested.** Nudgely, an alarm configurator: groups of alarms, recurrence
 rules, spoken messages, notifications in the browser. It was built
 *deliberately as a system under test*, with **34 documented behavioural rules**
 (R-01 to R-34) and **8 architectural rules** (A-01 to A-08), so there is a
@@ -87,7 +87,7 @@ right design for an application with one owner.
 
 1. Why is the test framework in a separate repository from the application?
 2. What is the difference between what the two test stacks are for?
-3. What makes Nudge a "deliberate" system under test, and why does that matter?
+3. What makes Nudgely a "deliberate" system under test, and why does that matter?
 
 ---
 

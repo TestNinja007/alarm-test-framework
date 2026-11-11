@@ -156,6 +156,19 @@ reading list is the only step needed to include it.
 
 ## Conventions that are easy to get wrong
 
+**The product is Nudgely; the identifiers still say nudge.** It was renamed
+from Nudge on 11 November 2026, by the rule in the application's README: only
+what a person sees carries the name. Other things keep the old name on
+purpose, because queries, workflow steps and links depend on them:
+
+- the Prometheus job (`nudge`) and its `service` label;
+- the dashboard's uid (`nudge-load`), file and tags;
+- the Grafana provider name;
+- the container names;
+- `NUDGE_DASHBOARDS`.
+
+Renaming them for tidiness breaks `performance.yml`.
+
 **Spec naming decides where it runs.** `*.api.spec.ts` runs without a browser;
 `*.ui.spec.ts` runs on all three engines. A file matching neither is silently
 collected by no project and runs nowhere.

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Automated tests for Nudge (alarm-configurator), kept apart from the application they exercise.",
+  "description": "Automated tests for Nudgely (alarm-configurator), kept apart from the application they exercise.",
   "scripts": {
     "test": "npm run test:parallel && npm run test:serial",
     "test:api": "playwright test --project=api --grep-invert @serial",

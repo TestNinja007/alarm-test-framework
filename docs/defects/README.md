@@ -1,6 +1,6 @@
 # Defect register
 
-Every defect found in Nudge so far, with how it was found, what caused it and
+Every defect found in Nudgely so far, with how it was found, what caused it and
 what now guards it.
 
 The register lives here rather than in the application repository because it is

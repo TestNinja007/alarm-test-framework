@@ -9,7 +9,7 @@ merged from the four matrix jobs so one page holds the lot.
 > The badge is one bit of information. The report is the evidence behind it,
 > which is the part worth reading.
 
-Automated tests for **Nudge** ([alarm-configurator](https://github.com/TestNinja007/alarm-configurator)),
+Automated tests for **Nudgely** ([alarm-configurator](https://github.com/TestNinja007/alarm-configurator)),
 kept in a repository of their own.
 
 The separation is deliberate. Tests here are written against the application's

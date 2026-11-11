@@ -1,6 +1,6 @@
 {
   "uid": "nudge-load",
-  "title": "Nudge under load",
+  "title": "Nudgely under load",
   "tags": ["nudge", "k6"],
   "timezone": "browser",
   "schemaVersion": 39,
