@@ -195,7 +195,7 @@ jobs:
             --grafana http://127.0.0.1:3000 \
             --user admin --password ci-ephemeral \
             --uid nudge-load \
-            --name "Nudgely — ${PROFILE} — $(date -u +%Y-%m-%d\ %H:%M) UTC" \
+            --name "Nujly — ${PROFILE} — $(date -u +%Y-%m-%d\ %H:%M) UTC" \
             | tee snapshot.txt
           url=$(grep -oE 'https?://\S+' snapshot.txt | tail -1 || true)
           echo "url=$url" >> "$GITHUB_OUTPUT"

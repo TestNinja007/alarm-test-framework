@@ -156,7 +156,7 @@ reading list is the only step needed to include it.
 
 ## Conventions that are easy to get wrong
 
-**The product is Nudgely; the identifiers still say nudge.** It was renamed
+**The product is Nujly; the identifiers still say nudge.** It was renamed
 from Nudge on 11 November 2026, by the rule in the application's README: only
 what a person sees carries the name. Other things keep the old name on
 purpose, because queries, workflow steps and links depend on them:
