@@ -71,17 +71,17 @@ on 20 October, to learn and demonstrate how microservices are tested. Section 12
 covers it. Everything else is one process and one database, and that is the
 right design for an application with one owner.
 
-**The numbers, as of 20 October 2026.**
+**The numbers, as of 11 November 2026.**
 
 | | |
 | --- | --- |
-| Playwright specs | 78 — api 49, and 27 on each browser engine |
+| Playwright specs | 78 — api 51, and 27 on each browser engine |
 | pytest tests | 68, covering both services' schemas and the boundary between them |
-| Application tests | 91 — 75 in the main API, 16 in the speech service, including contract tests |
+| Application tests | 96 — 80 in the main API, 16 in the speech service, including contract tests |
 | Requirements with a case | 34 of 34 |
 | Requirements with an automated spec | 33 of 34 |
 | Designed cases automated | 57 of 61 |
-| Defects found | 22 — 20 fixed, 1 open, 1 by design |
+| Defects found | 23 — 21 fixed, 1 open, 1 by design |
 
 ### Test yourself
 
@@ -125,6 +125,11 @@ right design for an application with one owner.
   behaviour into a fixed input and an expected output.
 - **The catch:** pinning is *server-wide* — it affects every worker. So those
   specs carry the `@serial` tag and run in a separate pass, alone.
+- **The limit, found by DEF-23:** a pinned clock governs only the code that
+  asks it. The date library read the system clock directly to settle a
+  repeated hour, so TC39 passed until the clocks went back on 1 November 2026
+  and failed from then on, and no amount of pinning could have changed that.
+  Pinning controls the application's "now", not every "now" in the process.
 
 ### There are no retries
 
@@ -514,6 +519,14 @@ because the test was written from the rule.
 element overflowed rather than reading the stylesheet: the field was 546px
 inside a 324px container, which pointed at shrinking rather than width.
 
+**DEF-23 — a test that failed on a date, not a change.** TC39 passed on 31
+October 2026 and failed the next night with no code changed: the date library
+settled a repeated hour by the season the code ran in, so fall-back night
+resolved to the wrong 01:30 from the moment Toronto's clocks went back. The
+nightly run caught it on the first night, which is what a scheduled run is for.
+*A test that fails by season is reporting a date-dependent defect, not being
+flaky.*
+
 ### Test yourself
 
 1. Which methods found the two Critical defects, and what does that suggest?
@@ -521,6 +534,8 @@ inside a 324px container, which pointed at shrinking rather than width.
 3. Why does DEF-19 return 503 rather than 500 — and what would be wrong with
    returning 503 for every database error?
 4. How did DEF-15 change the way traceability is maintained?
+5. TC39 failed with no code changed. Why did the pinned clock not prevent it,
+   and what would have caught it if the suite only ran on pushes?
 
 ---
 
