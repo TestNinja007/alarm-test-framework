@@ -1,6 +1,6 @@
 # Load and stress testing
 
-[k6](https://k6.io) scripts against the Nudge API, with a Prometheus and
+[k6](https://k6.io) scripts against the Nujly API, with a Prometheus and
 Grafana stack for watching the application while they run.
 
 ## Running

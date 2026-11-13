@@ -65,7 +65,7 @@ without a password, which is the point of a local dashboard. Do not carry that
 setting to anything reachable from elsewhere.
 
 The dashboard is then at
-**http://127.0.0.1:3000/d/nudge-load/nudge-under-load**, and
+**http://127.0.0.1:3000/d/nudge-load/nujly-under-load**, and
 `?from=now-15m&to=now&kiosk` drops the chrome if you want to screenshot it.
 
 ## Checking it works before running a load test

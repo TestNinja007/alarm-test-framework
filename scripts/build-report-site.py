@@ -143,7 +143,7 @@ PAGE = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nudge — test results</title>
+<title>Nujly — test results</title>
 <style>
   :root {{
     --bg: #ffffff; --fg: #18181b; --muted: #71717a; --border: #e4e4e7;
@@ -189,7 +189,7 @@ PAGE = """<!doctype html>
 </head>
 <body>
 <main>
-  <h1>Nudge — test results</h1>
+  <h1>Nujly — test results</h1>
   <p class="lede">{total} tests across two stacks. Each report is the one its own
   tool produces, so the Playwright traces and screenshots survive.</p>
 
