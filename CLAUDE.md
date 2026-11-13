@@ -77,7 +77,7 @@ If this changes, the harness needs one thing: a `tier` on `POST /test/users`.
 
 ## Where things stand
 
-*Last updated 11 November 2026. Update this when it stops being true — it is the
+*Last updated 13 November 2026. Update this when it stops being true — it is the
 first thing a session with no memory of the work should read.*
 
 Both halves of the agreed shape are **built and green**.
@@ -94,7 +94,7 @@ finds whichever answers first.
 | Playwright | 78 | api 51, chromium 27, firefox 27, webkit 27 |
 | pytest | 68 | both services' schemas, and the boundary between them |
 | Application tests | 96 | in the other repository — 80 in the main API, 16 in the speech service, including the contract tests |
-| CI | 6 jobs | green on both repositories |
+| CI | 7 jobs | here: api, chromium, firefox, webkit, database, report and publish. Two more in the application: build and container. Green on both repositories |
 
 Traceability: 34 of 34 requirements have a case, **33 of 34 have a spec**, 57
 of 61 designed cases are automated. The one requirement without a spec is R-26,
@@ -131,10 +131,11 @@ date the code ran.
    management and is their action, not mine.
 5. **`performance.yml` has never run.** It exists and has no run history, so
    the k6 profiles have only local results behind them.
-6. **The compose stack has run only in CI.** The application's new `container`
-   job (TestNinja007/alarm-configurator#25) builds and starts it, after fixing
-   four things that would have stopped it. Nobody has run it on a developer's
-   machine yet. Render still deploys the Node runtime.
+6. **The compose stack has run only in CI.** The application's `container` job
+   (TestNinja007/alarm-configurator#25) builds and starts it, after fixing four
+   things that would have stopped it. Nobody has run it on a developer's
+   machine yet. Production runs its `api` image: Render switched from the Node
+   runtime on 13 November 2026 (TestNinja007/alarm-configurator#29).
 
 ### Written up for sharing
 
