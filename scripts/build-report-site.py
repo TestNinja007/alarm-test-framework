@@ -23,6 +23,7 @@ is the problem this page exists to solve.
 """
 
 import argparse
+import datetime
 import html
 import io
 import json
@@ -101,6 +102,79 @@ def database_counts(path):
     }
 
 
+def parse_instant(text):
+    """An ISO 8601 timestamp as an aware UTC datetime, or None.
+
+    Playwright writes UTC with a trailing Z. pytest writes the runner's local
+    time, with or without an offset, and a GitHub runner's local time is UTC,
+    so a naive pytest timestamp is read as UTC.
+    """
+    if not text:
+        return None
+    try:
+        moment = datetime.datetime.fromisoformat(text.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=datetime.timezone.utc)
+    return moment.astimezone(datetime.timezone.utc)
+
+
+def when_tests_ran(playwright_path, database_path):
+    """When the run's tests started, and whether that is what the time means.
+
+    Playwright's own start time is preferred, then pytest's. With neither, the
+    page says when it was published instead, rather than passing the build
+    time off as the run's.
+    """
+    if playwright_path and os.path.exists(playwright_path):
+        try:
+            with io.open(playwright_path, encoding="utf-8") as handle:
+                stats = json.load(handle).get("stats") or {}
+            moment = parse_instant(stats.get("startTime"))
+            if moment:
+                return moment, "Tests ran"
+        except (ValueError, OSError):
+            pass
+    if database_path and os.path.exists(database_path):
+        try:
+            root = ET.parse(database_path).getroot()
+            suite = root if root.tag == "testsuite" else root.find("testsuite")
+            moment = parse_instant(suite.get("timestamp") if suite is not None else None)
+            if moment:
+                return moment, "Tests ran"
+        except (ET.ParseError, OSError):
+            pass
+    return datetime.datetime.now(datetime.timezone.utc), "Published"
+
+
+def when_line(moment, label):
+    """The date line under the title.
+
+    Written in UTC so it reads correctly without JavaScript. LOCAL_TIME then
+    shows it in the reader's own time zone, keeping the UTC text as a tooltip.
+    """
+    utc_text = "{:%A} {} {:%B %Y}, {:%H:%M} UTC".format(moment, moment.day, moment, moment)
+    return '<p class="when">{label} <time datetime="{iso}" data-local>{text}</time></p>'.format(
+        label=html.escape(label),
+        iso=moment.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        text=html.escape(utc_text),
+    )
+
+
+LOCAL_TIME = """<script>
+  for (const el of document.querySelectorAll("time[data-local]")) {
+    const moment = new Date(el.getAttribute("datetime"));
+    if (Number.isNaN(moment.getTime())) continue;
+    el.title = el.textContent;
+    el.textContent = moment.toLocaleString(undefined, {
+      weekday: "long", day: "numeric", month: "long", year: "numeric",
+      hour: "numeric", minute: "2-digit", timeZoneName: "short",
+    });
+  }
+</script>"""
+
+
 def verdict(counts):
     if counts is None:
         return "unavailable", "This stack did not produce a report for this run."
@@ -166,6 +240,8 @@ PAGE = """<!doctype html>
   }}
   main {{ max-width: 720px; margin: 0 auto; }}
   h1 {{ font-size: 1.5rem; margin: 0 0 4px; letter-spacing: -0.02em; }}
+  .when {{ font-size: .875rem; font-weight: 550; margin: 0 0 12px; }}
+  .when time {{ font-variant-numeric: tabular-nums; }}
   .lede {{ color: var(--muted); margin: 0 0 32px; }}
   .cards {{ display: grid; gap: 16px; grid-template-columns: 1fr; }}
   @media (min-width: 560px) {{ .cards {{ grid-template-columns: 1fr 1fr; }} }}
@@ -190,6 +266,7 @@ PAGE = """<!doctype html>
 <body>
 <main>
   <h1>Nujly — test results</h1>
+  {when}
   <p class="lede">{total} tests across two stacks. Each report is the one its own
   tool produces, so the Playwright traces and screenshots survive.</p>
 
@@ -204,6 +281,7 @@ PAGE = """<!doctype html>
     repository rather than implied by these numbers.</p>
   </footer>
 </main>
+{script}
 </body>
 </html>
 """
@@ -224,13 +302,16 @@ def main():
         for (name, href, blurb), counts in zip(STACKS, found)
     )
 
+    moment, label = when_tests_ran(args.playwright_json, args.database_xml)
+
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with io.open(args.out, "w", encoding="utf-8", newline="\n") as handle:
-        handle.write(PAGE.format(total=total, cards=cards))
+        handle.write(PAGE.format(total=total, cards=cards, when=when_line(moment, label), script=LOCAL_TIME))
 
     for (name, _href, _blurb), counts in zip(STACKS, found):
         state, note = verdict(counts)
         print("  {:<12} {:<12} {}".format(name, state, note))
+    print("  {} {:%Y-%m-%d %H:%M} UTC".format(label.lower(), moment))
     print("wrote {} ({} tests in all)".format(args.out, total))
 
 
