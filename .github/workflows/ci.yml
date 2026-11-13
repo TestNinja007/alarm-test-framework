@@ -50,19 +50,19 @@ jobs:
 
     steps:
       - name: Check out the framework
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # The application is a separate repository on purpose: the suite is
       # written against its published interface, not against internals it can
       # see. CI brings the two together only to run them.
       - name: Check out the application under test
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: TestNinja007/alarm-configurator
           path: app
           ref: main
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -145,7 +145,7 @@ jobs:
 
       - name: Upload this job's blob report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: blob-report-${{ matrix.project }}
           path: blob-report/
@@ -153,7 +153,7 @@ jobs:
 
       - name: Upload the application log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: application-log-${{ matrix.project }}
           path: app.log
@@ -203,22 +203,22 @@ jobs:
 
     steps:
       - name: Check out the framework
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Check out the application under test
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: TestNinja007/alarm-configurator
           path: app
           ref: main
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
           cache: pip
@@ -370,7 +370,7 @@ jobs:
 
       - name: Hand the report to the report job
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: database-report
           path: database-report/
@@ -378,7 +378,7 @@ jobs:
 
       - name: Upload the application logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: app-log-database
           path: |
@@ -399,9 +399,9 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -409,7 +409,7 @@ jobs:
       - run: npm ci
 
       - name: Collect every job's blob report
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: blob-report-*
           path: all-blob-reports
@@ -425,7 +425,7 @@ jobs:
       - name: Collect the database layer's report
         id: database-report
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: database-report
           path: database-report
@@ -444,7 +444,7 @@ jobs:
         run: npx playwright merge-reports --reporter html,json ./blobs
 
       - name: Keep the merged report as an artifact too
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: playwright-report/
@@ -470,7 +470,7 @@ jobs:
 
       - name: Package it for Pages
         if: github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site/
 
@@ -509,4 +509,4 @@ jobs:
     steps:
       - name: Publish
         id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

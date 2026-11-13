@@ -54,16 +54,16 @@ jobs:
 
     steps:
       - name: Check out the framework
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Check out the application under test
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: TestNinja007/alarm-configurator
           path: app
           ref: main
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -219,7 +219,7 @@ jobs:
 
       - name: Upload the measurements
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: performance-${{ inputs.profile || 'load' }}
           path: |
